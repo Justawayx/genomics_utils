@@ -5,7 +5,7 @@ nucs = ['A', 'G', 'C', 'T']
 
 alt_nuc_dict = {nuc: [altnuc for altnuc in nucs if (altnuc != nuc)] for nuc in nucs}
 
-f = open("codons.txt", 'r')
+f = open("/projects/winzeler/ROTATION_PROJECT/daisy/genomics_utils/utils/codons.txt", 'r')
 header = f.readline()
 
 codon_aa_dict = {}
