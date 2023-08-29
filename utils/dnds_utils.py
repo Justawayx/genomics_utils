@@ -16,7 +16,7 @@ for line in f:
 	codon_aa_dict[codon] = aa_3
 	codon_aa1_dict[codon] = aa_1
 
-def classify_snv(nuc_sequence, pos, new_allele, verbose=False):
+def classify_snv(nuc_sequence, pos, new_allele, verbose=False, formatted=False):
 	codon_start_pos = 3*(pos // 3)
 	relative_pos = pos % 3
 	codon = nuc_sequence[codon_start_pos:codon_start_pos+3]
@@ -37,7 +37,10 @@ def classify_snv(nuc_sequence, pos, new_allele, verbose=False):
 		else:
 			classification = "nonsynonymous"
 	
-	if verbose:
+	# Example: p.Leu322Phe/c.964C>T
+	if verbose and formatted:
+		return (classification, ("%i%s>%s" % (pos+1, lcodon[relative_pos], new_allele)), ("%s%i%s" % (old_aa, (codon_start_pos//3) + 1, new_aa)))
+	elif verbose:
 		return (classification, (codon, new_codon), (old_aa, new_aa))
 	else:
 		return classification

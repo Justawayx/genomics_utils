@@ -1,0 +1,32 @@
+#!/bin/sh
+#PBS -A winzeler-group
+#PBS -N Sarah_Pfal_bwa_mem
+#PBS -l nodes=1:ppn=8,walltime=12:00:00
+#PBS -o /home/dwc001/scratch/logs
+#PBS -e /home/dwc001/scratch/logs
+#PBS -M dwc001@ucsd.edu
+#PBS -m ea
+#PBS -t 1-4
+
+. /projects/winzeler/ROTATION_PROJECT/daisy/sarah_yliu3/gatk_pipeline/config.cfg
+
+# ================================================================================
+# 1. Make sure config.cfg is updated with the right paths.
+# 2. Make sure to source the right path to config.cfg above.
+# 3. Change -t and -N/o/e/M above according to your needs.
+# ================================================================================
+
+module load bwa
+
+readarray samples < $samples_file
+samples=(null ${samples[@]}) # zero to one start index
+sample=${samples[$PBS_ARRAYID]}
+echo $sample
+
+# ================================================================================
+
+echo "Running bwa mem..."
+
+bwa mem -M -t 16 $ref_fasta $fastq_dir/${sample}_R1.fastq.gz $fastq_dir/${sample}_R2.fastq.gz > $main_dir/${sample}.sam
+
+echo "Done!"
