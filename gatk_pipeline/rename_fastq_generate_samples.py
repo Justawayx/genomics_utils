@@ -1,7 +1,7 @@
 import sys, os, re
 
-answer = input("Has fastq_dir in config.cfg been updated? y/n")
-if answer.lower != 'y':
+answer = input("Has fastq_dir in config.cfg been updated? y/n\n")
+if answer.lower() != 'y':
 	sys.exit("Make sure to update fastq_dir in config.cfg")
 
 def get_env_value_from_config(env_variable):
@@ -19,8 +19,8 @@ def get_env_value_from_config(env_variable):
 fastq_dir = get_env_value_from_config('fastq_dir')
 species_abbr = get_env_value_from_config('species_abbr')
 
-answer = input("Do the fastq files in fastq_dir need to be renamed (and are from IGM)? y/n")
-if answer.lower != 'y':
+answer = input("Do the fastq files in fastq_dir need to be renamed (and are from IGM)? y/n\n")
+if answer.lower() == 'y':
 	
 	# Current IGM format:
 	# {sample}_Sx_Lxxx_Rx_001.fastq.gz
