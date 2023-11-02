@@ -2,10 +2,10 @@ import sys, os, gzip, argparse
 from collections import defaultdict
 
 parser = argparse.ArgumentParser(
-	description="Various interactive command line tools for dealing with files.",
-	epilog="""
+	description="""Various interactive command line tools for dealing with files.
+	
 	Available tools:
-		rename: Renames list of files
+	     rename: Renames list of files
 	""")
 parser.add_argument('action')
 
@@ -24,8 +24,20 @@ if action.lower() == "rename": # Rename
 	if not os.path.exists(file_dir): # Check if directory exists
 		sys.exit("ERROR: Invalid directory %s" % file_dir)
 	
-	orig_fnames = input("Enter list of newline separated ORIGINAL file names:\n")
-	orig_fnames = [orig_fname.strip() for orig_fname in orig_fnames.split('\n')]
+	map_path = input("Enter path to a text file that contains two tab separated columns, left column with the ORIGINAL file name, right column with the NEW file name: ")
+	
+	if not os.path.exists(map_path):
+		sys.exit("ERROR: Mapping file %s does not exist" % file_path)
+	
+	orig_fnames = []
+	new_fnames = []
+	f = open(map_path, 'r'):
+	for line in f:
+		try:
+			orig_fname, new_fname = line.rstrip('\n').split('\t')
+			orig_fnames.append(orig_fname); new_fnames.append(new_fname)
+		except:
+			sys.exit("ERROR: Mapping file is formatted improperly")
 	
 	if len(orig_fnames) != len(set(orig_fnames)):
 		sys.exit("ERROR: Original file name list has duplicates")
@@ -36,9 +48,6 @@ if action.lower() == "rename": # Rename
 		if not os.path.exists(file_path):
 			sys.exit("ERROR: File %s does not exist" % file_path)
 		orig_fpaths.append(file_path)
-	
-	new_fnames = input("Enter list of newline separated NEW file names:\n")
-	new_fnames = [new_fname.strip() for new_fname in new_fnames.split('\n')]
 	
 	if len(new_fnames) != len(set(new_fnames)):
 		sys.exit("ERROR: New file name list has duplicates")
