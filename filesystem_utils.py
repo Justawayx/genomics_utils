@@ -2,11 +2,8 @@ import sys, os, gzip, argparse
 from collections import defaultdict
 
 parser = argparse.ArgumentParser(
-	description="""Various interactive command line tools for dealing with files.
-	
-	Available tools:
-	     rename: Renames list of files
-	""")
+	description="Various interactive command line tools for dealing with files.",
+	epilog="Available tools: rename (Renames list of files)")
 parser.add_argument('action')
 
 args = parser.parse_args()
@@ -31,13 +28,16 @@ if action.lower() == "rename": # Rename
 	
 	orig_fnames = []
 	new_fnames = []
-	f = open(map_path, 'r'):
+	f = open(map_path, 'r')
 	for line in f:
+		if line.rstrip('\n') == '':
+			continue
 		try:
 			orig_fname, new_fname = line.rstrip('\n').split('\t')
 			orig_fnames.append(orig_fname); new_fnames.append(new_fname)
 		except:
 			sys.exit("ERROR: Mapping file is formatted improperly")
+	f.close()
 	
 	if len(orig_fnames) != len(set(orig_fnames)):
 		sys.exit("ERROR: Original file name list has duplicates")
@@ -63,7 +63,7 @@ if action.lower() == "rename": # Rename
 	
 	command_list = []
 	for orig_fpath, new_fpath in zip(orig_fpaths, new_fpaths):
-		command = "mv %s %s" % orig_fpath, new_fpath
+		command = "mv %s %s" % (orig_fpath, new_fpath)
 		command_list.append(command)
 		os.system(command)
 	
