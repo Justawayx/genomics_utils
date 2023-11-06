@@ -43,7 +43,7 @@ def get_format_data_dict(FORMAT, data):
 # Load gene annotations
 # =======================
 
-chrom_gene_ids_dict, gene_desc_dict, gene_interval_dict = get_gene_info_dicts(SPECIES_ABBR)
+chrom_gene_ids_dict, gene_desc_dict, gene_interval_dict = genome_utils.get_gene_info_dicts(WDIR, species=SPECIES_ABBR)
 
 # =======================
 # Combine VCFs
@@ -63,7 +63,7 @@ if len(VCFS) > 1:
 	vcf_partnum_tups = [(vcf, int(vcf.split('-part')[1].split('.raw.snps.indels.vcf')[0])) for vcf in VCFS]
 	ordered_vcfs = [tup[0] for tup in sorted(vcf_partnum_tups, key=lambda x: x[1])]
 	
-	o = open(f"{MAIN_DIR}/{GROUP_NAME}.raw.snps.indels.vcf")
+	o = open(f"{MAIN_DIR}/{GROUP_NAME}.raw.snps.indels.vcf", 'w')
 	first_vcf = ordered_vcfs[0]
 	with open(f"{MAIN_DIR}/{first_vcf}", 'r') as f:
 		for line in f:
@@ -98,7 +98,7 @@ if ann_exists_flag:
 if not ann_exists_flag:
 	SNPEFF_SPECIES_ID = genome_utils.SPECIES_SNPEFF_ID_DICT[SPECIES_ABBR]
 	os.chdir(MAIN_DIR)
-	cmd = f"java -jar {SNPEFF_DIR}/snpEff.jar -formatEFF -o vcf -ud 0 -c {SNPEFF_DIR}/snpEff.config {SNPEFF_SPECIES_ID} {MAIN_DIR}/{VCF} > {MAIN_DIR}/{VCF}.ann.txt"
+	cmd = f"java -jar {SNPEFF_DIR}/snpEff.jar -formatEFF -o vcf -ud 1000 -c {SNPEFF_DIR}/snpEff.config {SNPEFF_SPECIES_ID} {MAIN_DIR}/{VCF} > {MAIN_DIR}/{VCF}.ann.txt"
 	print(cmd)
 	os.system(cmd)
 
