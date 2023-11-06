@@ -4,7 +4,7 @@
 # and run `python rename_fastq_generate_samples.py` first
 # =====================================================================
 
-import os
+import os, sys
 
 # ======================================
 # TSCC parameters
@@ -14,14 +14,7 @@ import os
 
 LOG_DIR = "/home/dwc001/scratch/logs"
 EMAIL = "dwc001@ucsd.edu"
-EMAIL_OPTIONS = "ea"
-
-# Interactive ones
-
-GROUP_NAME = input("Enter group name: ")
-JOB_NAME = input("Enter job name, or nothing if same as group name: ")
-if JOB_NAME == '':
-	JOB_NAME = GROUP_NAME
+EMAIL_OPTIONS = "ea"	
 
 # ======================================
 # More parameters (change if necessary)
@@ -37,8 +30,10 @@ def get_env_value_from_config(env_variable):
 			key, value = line.rstrip('\n').split('=')
 			if key == env_variable:
 				return value
-	print("Environmental variable %s not found in config.cfg" % env_variable)
-	return False
+	sys.exit("Environmental variable %s not found in config.cfg" % env_variable)
+
+GROUP_NAME = get_env_value_from_config('group_name')
+JOB_NAME = GROUP_NAME
 
 SAMPLES_PATH = get_env_value_from_config('samples_file')
 FASTQ_DIR = get_env_value_from_config('fastq_dir')
