@@ -27,7 +27,7 @@ SPECIES_ABBR = get_env_value_from_config('species_abbr')
 GROUP_NAME = get_env_value_from_config('group_name')
 
 samples = [line.strip() for line in open(SAMPLES_PATH, 'r')]
-print("Here are the sample names: " + ', '.join(samples))
+print("Here are the sample names:\n\t" + '\n\t'.join(samples))
 answer = input("Enter name of the parent sample: ")
 while answer not in samples:
 	answer = input("%s is not in samples.txt, please try again: " % answer)
@@ -37,7 +37,15 @@ PARENT_SAMPLE = answer
 SNPEFF_DIR = f"{WDIR}/GENOME_RESOURCES/snpEff"
 
 def get_format_data_dict(FORMAT, data):
-		return {key: val for key, val in zip(FORMAT.split(':'), data.split(':'))}
+	return {key: val for key, val in zip(FORMAT.split(':'), data.split(':'))}
+
+def parse_info(INFO):
+	items = INFO.split(';')
+	info_dict = {}
+	for item in items:
+		key, value = item.split('=')
+		info_dict[key] = value
+	return info_dict
 
 # =======================
 # Load gene annotations
@@ -49,36 +57,48 @@ chrom_gene_ids_dict, gene_desc_dict, gene_interval_dict = genome_utils.get_gene_
 # Combine VCFs
 # =======================
 
-VCFS = [fname for fname in os.listdir(MAIN_DIR) if (fname.startswith(GROUP_NAME) and fname.endswith(".raw.snps.indels.vcf"))]
-print("The following VCF(s) were found in main_dir:\n" + '\n'.join(VCFS))
+vcf_path = f"{MAIN_DIR}/{GROUP_NAME}.raw.snps.indels.vcf"
+vcf_exists_flag = os.path.isfile(vcf_path)
 
-answer = input("Proceed with merging and running subtraction step? y/n ")
-while answer.lower() not in ['y', 'n']:
-	answer = input("Please enter y or n: ")
-
-if answer.lower() == 'n':
-	sys.exit("Aborting")
-
-if len(VCFS) > 1:
-	vcf_partnum_tups = [(vcf, int(vcf.split('-part')[1].split('.raw.snps.indels.vcf')[0])) for vcf in VCFS]
-	ordered_vcfs = [tup[0] for tup in sorted(vcf_partnum_tups, key=lambda x: x[1])]
+if vcf_exists_flag:
+	answer = input(f"{GROUP_NAME}.raw.snps.indels.vcf already exists (size: {os.path.getsize(vcf_path)//1e6} MB), combine VCFs? y/n ")
+	while answer.lower() not in ['y', 'n']:
+		answer = input("Please enter y or n: ")
 	
-	o = open(f"{MAIN_DIR}/{GROUP_NAME}.raw.snps.indels.vcf", 'w')
-	first_vcf = ordered_vcfs[0]
-	with open(f"{MAIN_DIR}/{first_vcf}", 'r') as f:
-		for line in f:
-			o.write(line)
+	if answer.lower() == 'y':
+		vcf_exists_flag = False # If yes, pretend it doesn't exist
+
+if not vcf_exists_flag:
+	VCFS = [fname for fname in os.listdir(MAIN_DIR) if (fname.startswith(GROUP_NAME + '-part') and fname.endswith(".raw.snps.indels.vcf"))]
+	print("The following partial VCF(s) were found in main_dir:\n" + '\n'.join(VCFS))
 	
-	for vcf in ordered_vcfs[1:]:
-		with open(f"{MAIN_DIR}/{vcf}", 'r') as f:
-			for line in f:
-				if line.startswith("#CHROM"):
-					break
-			
+	answer = input("Proceed with combining? y/n ")
+	while answer.lower() not in ['y', 'n']:
+		answer = input("Please enter y or n: ")
+	
+	if answer.lower() == 'n':
+		sys.exit("Aborting")
+	
+	if len(VCFS) > 1:
+		vcf_partnum_tups = [(vcf, int(vcf.split('-part')[1].split('.raw.snps.indels.vcf')[0])) for vcf in VCFS]
+		ordered_vcfs = [tup[0] for tup in sorted(vcf_partnum_tups, key=lambda x: x[1])]
+		
+		o = open(f"{MAIN_DIR}/{GROUP_NAME}.raw.snps.indels.vcf", 'w')
+		first_vcf = ordered_vcfs[0]
+		with open(f"{MAIN_DIR}/{first_vcf}", 'r') as f:
 			for line in f:
 				o.write(line)
-
-o.close()
+		
+		for vcf in ordered_vcfs[1:]:
+			with open(f"{MAIN_DIR}/{vcf}", 'r') as f:
+				for line in f:
+					if line.startswith("#CHROM"):
+						break
+				
+				for line in f:
+					o.write(line)
+	
+	o.close()
 
 # =======================
 # Run SnpEff on VCFs
@@ -86,9 +106,11 @@ o.close()
 
 VCF = f"{GROUP_NAME}.raw.snps.indels.vcf"
 
-ann_exists_flag = os.path.isfile("{MAIN_DIR}/{VCF}.ann.txt")
+vcf_ann_path = f"{MAIN_DIR}/{VCF}.ann.txt"
+ann_exists_flag = os.path.isfile(vcf_ann_path)
+
 if ann_exists_flag:
-	answer = input("%s.ann.txt already exists, rerun SnpEff? y/n " % VCF)
+	answer = input(f"{VCF}.ann.txt already exists (size: {os.path.getsize(vcf_ann_path)//1e6} MB), rerun SnpEff? y/n ")
 	while answer.lower() not in ['y', 'n']:
 		answer = input("Please enter y or n: ")
 	
@@ -110,19 +132,20 @@ f = open(f"{MAIN_DIR}/{VCF}.ann.txt")
 
 child_samples = []
 for line in f:
-		if line.startswith('#CHROM'):
-				header_items = line.strip().split('\t')
-				print('\t'.join(header_items))
-				for item in header_items[9:]:
-						if item != PARENT_SAMPLE:
-								child_samples.append(item)
-				break
+	if line.startswith('#CHROM'):
+		header_items = line.strip().split('\t')
+		for item in header_items[9:]:
+			if item != PARENT_SAMPLE:
+				child_samples.append(item)
+		break
 
-if set(child_samples + [PARENT_SAMPLE]) != set(sample):
+if set(child_samples + [PARENT_SAMPLE]) != set(samples):
 	sys.exit("Samples in VCF are inconsistent with the samples in samples.txt, aborting")
 
 chrom_pos_sample_data_dict = defaultdict(dict) # chrom -> pos -> sample -> data
 chrom_pos_anno_dict = defaultdict(dict) # chrom -> pos -> (ref, alt, gene, type, effect, impact, codon_change, aa_change)
+
+revert_sites = set() # (chrom, pos) tuples
 
 chrom_pos_quality_dict = defaultdict(dict)
 parent_col_idx = header_items.index(PARENT_SAMPLE)
@@ -150,21 +173,26 @@ for line in f:
 		
 		chrom_pos_quality_dict[CHROM][POS] = QUAL
 		chrom_pos_sample_data_dict[CHROM][POS] = {}
+		non_parent_GTs = []
 		
 		for idx in range(9, len(items)):
-				sample = header_items[idx]
-				data = items[idx]
-				data_dict = get_format_data_dict(FORMAT, data)
-				GT = data_dict['GT']				
-				if 'DP' not in data_dict or data_dict['DP'] == '.' or int(data_dict['DP']) < 7:
-						chrom_pos_sample_data_dict[CHROM][POS][sample] = (data_dict['GT'], 'LowDP')
-				else:
-					AD = data_dict['AD']
-					chrom_pos_sample_data_dict[CHROM][POS][sample] = (GT, AD)
+			sample = header_items[idx]
+			data = items[idx]
+			data_dict = get_format_data_dict(FORMAT, data)
+			GT = data_dict['GT']
+			if idx != parent_col_idx:
+				non_parent_GTs.append(GT)
+			if 'DP' not in data_dict or data_dict['DP'] == '.' or int(data_dict['DP']) < 7:
+				chrom_pos_sample_data_dict[CHROM][POS][sample] = (data_dict['GT'], 'LowDP')
+			else:
+				AD = data_dict['AD']
+				chrom_pos_sample_data_dict[CHROM][POS][sample] = (GT, AD)
+		
+		if set(non_parent_GTs) == set(['0/0']):
+			revert_sites.add((CHROM, POS))
 		
 		first_alt_allele = ALT.split(',')[0]
 		
-		vtype = 'SNP' if (REF in ['A', 'C', 'G', 'T'] and first_alt_allele in ['A', 'C', 'G', 'T']) else 'INDEL'				
 		pre_eff = INFO.split(';EFF=')[0]
 		eff = INFO.split(';EFF=')[1].split(';')[0]
 		
@@ -183,11 +211,15 @@ for line in f:
 				else:
 						allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
 		
-		if first_alt_allele in allele_anno_dict:
-				effect, impact, codon_change, aa_change, gene = allele_anno_dict[first_alt_allele]
-				chrom_pos_anno_dict[CHROM][POS] = (REF, first_alt_allele, gene, vtype, effect, impact, codon_change, aa_change)
-		else:
-				print('\t'.join(items))
+		vtypes = []; effects = []; impacts = []; codon_changes = []; aa_changes = []
+		for alt_allele in ALT.split(','):
+				if alt_allele == '*':
+					continue
+				effect, impact, codon_change, aa_change, gene = allele_anno_dict[alt_allele]
+				vtypes.append('SNP' if (REF in ['A', 'C', 'G', 'T'] and alt_allele in ['A', 'C', 'G', 'T']) else 'INDEL')
+				effects.append(effect); impacts.append(impact); codon_changes.append(codon_change); aa_changes.append(aa_change)
+		
+		chrom_pos_anno_dict[CHROM][POS] = (REF, ALT, gene, ','.join(vtypes), ','.join(effects), ','.join(impacts), ','.join(codon_changes), ','.join(aa_changes))
 
 # =======================
 # Write SNV/indel table
@@ -203,9 +235,8 @@ def AD_to_AAF(AD):
 		return sum(alt_depths)/total_depth
 
 ordered_samples = [PARENT_SAMPLE] + sorted(child_samples)
-print('\n'.join(ordered_samples))
 
-f = open(f"{OUTPUT_DIR}/{OUTPUT_NAME}_GATK-Filters-modified.tsv", 'w')
+f = open(f"{MAIN_DIR}/{GROUP_NAME}_GATK-Filters.tsv", 'w')
 header_items = ['Chromosome', 'Position', 'Gene_Name', 'Gene_Descrip', 'Quality', 'Ref_Base', 'Alt_Base', 'Type', 
 								 'Effect', 'Impact', 'Codon_Change', 'Amino_Acid_Change']
 
@@ -218,9 +249,10 @@ for sample in ordered_samples:
 for sample in ordered_samples:
 		header_items.append("%s_AlleleDepths" % sample)
 
+header_items.append("Has_NonHet")
+
 f.write('\t'.join(header_items) + '\n')
 
-new_chrom_pos_sets = defaultdict(set)
 for chrom in chrom_pos_sample_data_dict:
 		for pos in sorted(chrom_pos_sample_data_dict[chrom]):
 				
@@ -231,25 +263,33 @@ for chrom in chrom_pos_sample_data_dict:
 				
 				quality = chrom_pos_quality_dict[chrom][pos]
 				ref, alt, gene, vtype, effect, impact, codon_change, aa_change = chrom_pos_anno_dict[chrom][pos]
-				gene_desc = chrom_gene_desc_dict[chrom][gene] if gene in chrom_gene_desc_dict[chrom] else ''
+				gene_desc = gene_desc_dict[gene] if gene in gene_desc_dict else ''
 				
 				items = [chrom, pos, gene, gene_desc, quality, ref, alt, vtype, effect, impact, codon_change, aa_change]
 				
+				GTs = []
 				for sample in ordered_samples:
 						GT = chrom_pos_sample_data_dict[chrom][pos][sample][0]
-						items.append(GT)
+						items.append(' ' + GT); GTs.append(GT)
 				
+				ADs = []
 				for sample in ordered_samples:
 						AD = chrom_pos_sample_data_dict[chrom][pos][sample][1]
 						AAF = AD_to_AAF(AD)
-						items.append(AAF)
+						items.append(AAF); ADs.append(AD)
 				
 				for sample in ordered_samples:
 						AD = chrom_pos_sample_data_dict[chrom][pos][sample][1]
 						items.append(AD)
 				
-				f.write('\t'.join([str(item) for item in items]) + '\n')
+				has_non_het = False
+				for AD, GT in zip(ADs, GTs):
+						if not GT.startswith('0/') and AD != "LowDP":
+								has_non_het = True
 				
-				new_chrom_pos_sets[chrom].add(pos)
+				items.append(has_non_het)
+				f.write('\t'.join([str(item) for item in items]) + '\n')
 
 f.close()
+
+print(f"Done! Check {MAIN_DIR}/{GROUP_NAME}_GATK-Filters.tsv")
