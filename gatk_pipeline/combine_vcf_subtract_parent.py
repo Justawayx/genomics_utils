@@ -1,5 +1,5 @@
 from collections import defaultdict
-import os
+import os, sys
 from urllib.parse import unquote
 from utils import genome_utils
 
