@@ -4,14 +4,9 @@ import pickle
 
 SPECIES_SNPEFF_ID_DICT = {"p_fal": "Pf3D7v3"}
 
-protein_aa_info_dict = pickle.load(open('/projects/winzeler/ROTATION_PROJECT/daisy/REF_DATA/pfal/protein_aa_info_dict.pkl', 'rb'))
-
-def gene_aa_plddt(gene, aa_idx):
-    try:
-        plddt = protein_aa_info_dict[gene][aa_idx][1]
-        return plddt
-    except:
-        return -1
+def get_protein_aa_info_dict(WDIR):
+    protein_aa_info_dict = pickle.load(open('%s/ROTATION_PROJECT/daisy/REF_DATA/pfal/protein_aa_info_dict.pkl' % WDIR, 'rb'))
+    return protein_aa_info_dict
 
 def get_gene_info_dicts(WDIR, species="p_fal"):
     
