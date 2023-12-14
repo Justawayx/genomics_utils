@@ -51,7 +51,10 @@ def parse_info(INFO):
 # Load gene annotations
 # =======================
 
-chrom_gene_ids_dict, gene_desc_dict, gene_interval_dict, _ = genome_utils.get_gene_info_dicts(WDIR, species=SPECIES_ABBR)
+species_refstrain_dict = {'p_fal': '3D7'}
+
+ga = genome_utils.GenomeAnnotation(WDIR, SPECIES_ABBR, species_refstrain_dict[SPECIES_ABBR])
+gene_desc_dict = ga.get_gene_desc_dict()
 
 # =======================
 # Combine VCFs
