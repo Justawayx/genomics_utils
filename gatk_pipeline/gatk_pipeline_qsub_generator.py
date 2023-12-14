@@ -35,6 +35,7 @@ def get_env_value_from_config(env_variable):
 GROUP_NAME = get_env_value_from_config('group_name')
 JOB_NAME = GROUP_NAME
 
+STRAIN = get_env_value_from_config('strain')
 SAMPLES_PATH = get_env_value_from_config('samples_file')
 FASTQ_DIR = get_env_value_from_config('fastq_dir')
 SPECIES_ABBR = get_env_value_from_config('species_abbr')
@@ -66,7 +67,7 @@ qsub_2_walltime_hours = 150 # Should be big to be safe
 
 # Number of separate qsub_2 scripts
 
-num_qsub_2_scripts = (qsub_2_total_walltime_hours//qsub_2_walltime_hours) + 1
+num_qsub_2_scripts = (qsub_2_total_walltime_hours//qsub_2_walltime_hours) + 4
 
 chrom_length_dict = {}
 chromosome_boundaries_ordered = [0]
@@ -107,7 +108,7 @@ for idx, chromosome_list in enumerate(chromosome_lists):
 	qsub_2_call_variants_str = \
 f'''#!/bin/sh
 #PBS -A winzeler-group
-#PBS -N {JOB_NAME}_callvar
+#PBS -N {JOB_NAME}{part_str}_callvar
 #PBS -l nodes=1:ppn=16,walltime={qsub_2_walltime_hours}:00:00
 #PBS -o {LOG_DIR}
 #PBS -e {LOG_DIR}
@@ -190,7 +191,7 @@ O=$main_dir/${sample}_sorted.rg.md.bam \\
 M=$main_dir/${sample}_sorted.rg.md.metrics.txt \\
 CREATE_INDEX=true
 
-echo "Running GATK RelaignerTargetCreator..."
+echo "Running GATK RealignerTargetCreator..."
 
 java -Xmx12g -jar $gatk_dir/GenomeAnalysisTK.jar \\
         -T RealignerTargetCreator \\
@@ -223,4 +224,54 @@ echo "Done!"
 
 f = open("qsub_1_align", 'w')
 f.write(qsub_1_align_str)
+f.close()
+
+qsub_cnv_analysis_str = \
+f'''#!/bin/sh
+#PBS -A winzeler-group
+#PBS -N {JOB_NAME}_CNV_analysis
+#PBS -l nodes=1:ppn=8,walltime=08:00:00
+#PBS -o {LOG_DIR}
+#PBS -e {LOG_DIR}
+#PBS -M {EMAIL}
+#PBS -m {EMAIL_OPTIONS}
+#PBS -t 1-{num_samples}
+
+. {CONFIG_PATH}
+
+gatk_path=/opt/biotools/GenomeAnalysisTK/4.0.11.0/gatk-package-4.0.11.0-local.jar
+pon_path=/projects/winzeler/ANALYSIS/DNAseq/Madeline/GATK_CNV/PON/{STRAIN}cnv.pon.hdf5
+interval_list_path=/projects/winzeler/ANALYSIS/DNAseq/Madeline/GATK_CNV/references/p_fal.preprocessed.interval_list
+'''
+
+qsub_cnv_analysis_str += \
+'''
+readarray samples < $samples_file
+samples=(null ${samples[@]}) # zero to one start index
+sample=${samples[$PBS_ARRAYID]}
+echo $sample
+
+echo "Working on sample $sample"
+
+bam_path=$main_dir/${sample}.ready.bam
+
+echo "Collecting read counts..."
+java -jar $gatk_path CollectReadCounts \
+        -I $bam_path \
+        -L $interval_list_path \
+        --interval-merging-rule OVERLAPPING_ONLY \
+        -O $main_dir/${sample}.counts.hdf5
+
+echo "Denoising read counts..."
+java -jar $gatk_path DenoiseReadCounts \
+        -I $main_dir/${sample}.counts.hdf5 \
+        --count-panel-of-normals $pon_path \
+        --standardized-copy-ratios $main_dir/${sample}.standardizedCR.tsv \
+        --denoised-copy-ratios $main_dir/${sample}.denoisedCR.tsv
+
+echo "Done"
+'''
+
+f = open("qsub_cnv_analysis", 'w')
+f.write(qsub_cnv_analysis_str)
 f.close()
