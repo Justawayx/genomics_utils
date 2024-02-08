@@ -24,7 +24,7 @@ if action.lower() == "combine_vcf":
 	vcfs_path = input("Enter path to a text file that contains ordered list of VCFs to combine, first to last: ")
 	
 	if not os.path.exists(vcfs_path):
-		sys.exit("ERROR: VCF list %s does not exist" % file_path)
+		sys.exit("ERROR: VCF list %s does not exist" % vcfs_path)
 	
 	ordered_vcfs = [line.strip() for line in open(vcfs_path, 'r')]
 	
@@ -53,25 +53,25 @@ if action.lower() == "combine_vcf":
 	for first_site, last_site in ordered_site_intervals:
 		print('\t'.join(first_site) +'\t' + '\t'.join(last_site))
 	
-	answer = input("Proceed? y/n")
+	answer = input("Proceed? y/n ")
 	while answer.lower() not in ['y', 'n']:
 		answer = input("Please enter y or n: ")
 	
 	if answer.lower() == 'n':
 		sys.exit("Aborting")
 	
-	combined_vcf_path = '%s/%s_COMBINED' % (file_path, vcfs[0])
+	combined_vcf_path = '%s/%s_COMBINED' % (file_dir, ordered_vcfs[0])
 	o = open(combined_vcf_path, 'w')
 	
-	for i, vcf in enumerate(vcfs):
+	for i, vcf in enumerate(ordered_vcfs):
 		vcf_path = '%s/%s' % (file_dir, vcf)
 		first_site, last_site = ordered_site_intervals[i]
-		if i == (len(ordered_site_intervals)-1):
+		if i < (len(ordered_site_intervals)-1):
 			next_start_chrom, next_start_pos = ordered_site_intervals[i+1][0]
 			f = open(vcf_path, 'r')
 			for line in f:
 				if i == 0:
-					o.write(line + '\n')
+					o.write(line)
 				if line.startswith('#CHROM'):
 					break
 			
@@ -79,7 +79,7 @@ if action.lower() == "combine_vcf":
 				CHROM, POS = line.split('\t')[:2]
 				if CHROM == next_start_chrom and POS == next_start_pos:
 					break
-				o.write(line + '\n')
+				o.write(line)
 			
 		else:
 			f = open(vcf_path, 'r')
@@ -88,7 +88,7 @@ if action.lower() == "combine_vcf":
 					break
 			
 			for line in f:
-				o.write(line + '\n')
+				o.write(line)
 	
 	print("Done! Check %s" % combined_vcf_path)
     
@@ -103,7 +103,7 @@ if action.lower() == "rename": # Rename
 	map_path = input("Enter path to a text file that contains two tab separated columns, left column with the ORIGINAL file name, right column with the NEW file name: ")
 	
 	if not os.path.exists(map_path):
-		sys.exit("ERROR: Mapping file %s does not exist" % file_path)
+		sys.exit("ERROR: Mapping file %s does not exist" % map_path)
 	
 	orig_fnames = []
 	new_fnames = []
