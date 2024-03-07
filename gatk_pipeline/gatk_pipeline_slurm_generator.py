@@ -12,9 +12,10 @@ import os, sys
 
 # Change these
 
-LOG_DIR = "/home/dwc001/scratch/logs"
+ACCOUNT = "htl124"
+LOG_DIR = "/tscc/lustre/scratch/dwc001/logs"
 EMAIL = "dwc001@ucsd.edu"
-EMAIL_OPTIONS = "ea"	
+EMAIL_OPTIONS = "END"
 
 # ======================================
 # More parameters (change if necessary)
@@ -63,7 +64,7 @@ biggest_fastqgz_size = max(fastqgz_sizes)
 
 qsub_1_walltime_hours = int((biggest_fastqgz_size/1_000_000_000.0)*3) + 20
 qsub_2_total_walltime_hours = int((total_fastqgz_size/1_000_000_000.0)*5) + 10
-qsub_2_walltime_hours = 150 # Should be big to be safe
+qsub_2_walltime_hours = 20 # Should be big to be safe
 
 # Number of separate qsub_2 scripts
 
@@ -72,17 +73,24 @@ num_qsub_2_scripts = (qsub_2_total_walltime_hours//qsub_2_walltime_hours) + 4
 chrom_length_dict = {}
 chromosome_boundaries_ordered = [0]
 chromosomes_ordered = []
+chrom = 'dummy'
 with open(REF_FASTA_PATH, 'r') as f:
 	for line in f:
 		if line.startswith('>'):
-			items = line[1:].split('|')
-			chrom = items[0].strip()
-			for item in items:
-				if 'length=' in item:
-					length = int(item.split('length=')[1].strip())
-			chrom_length_dict[chrom] = length
-			chromosome_boundaries_ordered.append(chromosome_boundaries_ordered[-1] + length)
-			chromosomes_ordered.append(chrom)
+			if chrom != 'dummy':
+				chrom_length_dict[chrom] = len(seq)
+				chromosome_boundaries_ordered.append(chromosome_boundaries_ordered[-1] + len(seq))
+				chromosomes_ordered.append(chrom)
+			seq = ''
+			chrom = line[1:].split('|')[0].split(' ')[0]
+		else:
+			seq += line.strip('\n')
+
+chrom_length_dict[chrom] = len(seq)
+chromosome_boundaries_ordered.append(chromosome_boundaries_ordered[-1] + len(seq))
+chromosomes_ordered.append(chrom)
+
+print(sorted(chrom_length_dict.items()))
 
 genome_length = sum(chrom_length_dict.values())
 genome_breakpoints = [((genome_length/num_qsub_2_scripts)*i) for i in range(1,num_qsub_2_scripts)] + [genome_length]
@@ -107,57 +115,113 @@ for idx, chromosome_list in enumerate(chromosome_lists):
 	
 	qsub_2_call_variants_str = \
 f'''#!/bin/sh
-#PBS -A winzeler-group
-#PBS -N {JOB_NAME}{part_str}_callvar
-#PBS -l nodes=1:ppn=16,walltime={qsub_2_walltime_hours}:00:00
-#PBS -o {LOG_DIR}
-#PBS -e {LOG_DIR}
-#PBS -M {EMAIL}
-#PBS -m {EMAIL_OPTIONS}
+#SBATCH --job-name {JOB_NAME}{part_str}_callvar
+#SBATCH --partition=hotel
+#SBATCH --nodes=1
+#SBATCH --mem-per-cpu=16G
+#SBATCH --ntasks-per-node=1
+#SBATCH --time={qsub_2_walltime_hours}:00:00 
+#SBATCH --qos=hotel
+#SBATCH --account={ACCOUNT}
+#SBATCH --export=ALL
+#SBATCH --output {LOG_DIR}/slurm-%j.out-%N
+#SBATCH --output {LOG_DIR}/slurm-%j.err-%N
+#SBATCH --mail-type {EMAIL_OPTIONS}
+#SBATCH --mail-user {EMAIL}
 
 . {CONFIG_PATH}
 
+module load shared
+module load gatk
+
 echo "Running GATK HaplotypeCaller..."
-java -jar $gatk_dir/GenomeAnalysisTK.jar \\
-	-T HaplotypeCaller \\
+gatk HaplotypeCaller \\
 	-R $ref_fasta \\
 {gatk_input_combined_samples_str}{gatk_specify_chrom_options}
-	-o $main_dir/{GROUP_NAME}{part_str}.raw.snps.indels.vcf
+	-O $main_dir/{GROUP_NAME}{part_str}.raw.snps.indels.vcf
 
 echo "Done!"
 '''
 	
-	f = open(f"qsub_2_call_variants{part_str}", 'w')
+	f = open(f"sbatch_2_call_variants{part_str}", 'w')
 	f.write(qsub_2_call_variants_str)
 	f.close()
 
-qsub_1_align_str = \
+qsub_0_bwa_str = \
 f'''#!/bin/sh
-#PBS -A winzeler-group
-#PBS -N {JOB_NAME}_align
-#PBS -l nodes=1:ppn=16,walltime={qsub_1_walltime_hours}:00:00
-#PBS -o {LOG_DIR}
-#PBS -e {LOG_DIR}
-#PBS -M {EMAIL}
-#PBS -m {EMAIL_OPTIONS}
-#PBS -t 1-{num_samples}
+#SBATCH --job-name {JOB_NAME}_bwa-mem
+#SBATCH --partition=hotel
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=16
+#SBATCH --time={qsub_1_walltime_hours}:00:00 
+#SBATCH --qos=hotel
+#SBATCH --account={ACCOUNT}
+#SBATCH --export=ALL
+#SBATCH --output {LOG_DIR}/slurm-%j.out-%N
+#SBATCH --output {LOG_DIR}/slurm-%j.err-%N
+#SBATCH --mail-type {EMAIL_OPTIONS}
+#SBATCH --mail-user {EMAIL}
+#SBATCH --array=1-{num_samples}
 
 . {CONFIG_PATH}
 '''
 
-qsub_1_align_str += '''
-module load bwa
+qsub_0_bwa_str += '''
+module load shared
+module load samtools
+module load gatk
+module load picard
 
 readarray samples < $samples_file
 samples=(null ${samples[@]}) # zero to one start index
-sample=${samples[$PBS_ARRAYID]}
+sample=${samples[$SLURM_ARRAY_TASK_ID]}
 echo $sample
 
 # ================================================================================
 
 echo "Running bwa mem..."
 
-bwa mem -M -t 16 $ref_fasta $fastq_dir/${species_abbr}_${sample}_R1.fastq.gz $fastq_dir/${species_abbr}_${sample}_R2.fastq.gz > $main_dir/${sample}.sam
+/tscc/projects/ps-winzelerlab/TOOLS/bin/bwa mem -M -t 16 $ref_fasta $fastq_dir/${species_abbr}_${sample}_R1.fastq.gz $fastq_dir/${species_abbr}_${sample}_R2.fastq.gz > $main_dir/${sample}.sam
+
+echo "Done!"
+'''
+
+qsub_1_align_str = \
+f'''#!/bin/sh
+#SBATCH --job-name {JOB_NAME}_align
+#SBATCH --partition=hotel
+#SBATCH --nodes=1
+#SBATCH --mem-per-cpu=16
+#SBATCH --ntasks-per-node=1
+#SBATCH --time={qsub_1_walltime_hours}:00:00 
+#SBATCH --qos=hotel
+#SBATCH --account={ACCOUNT}
+#SBATCH --export=ALL
+#SBATCH --output {LOG_DIR}/slurm-%j.out-%N
+#SBATCH --output {LOG_DIR}/slurm-%j.err-%N
+#SBATCH --mail-type {EMAIL_OPTIONS}
+#SBATCH --mail-user {EMAIL}
+#SBATCH --array=1-{num_samples}
+
+. {CONFIG_PATH}
+'''
+
+qsub_1_align_str += '''
+module load shared
+module load samtools
+module load gatk
+module load picard
+
+readarray samples < $samples_file
+samples=(null ${samples[@]}) # zero to one start index
+sample=${samples[$SLURM_ARRAY_TASK_ID]}
+echo $sample
+
+# ================================================================================
+
+# echo "Running bwa mem..."
+
+# /tscc/projects/ps-winzelerlab/TOOLS/bin/bwa mem -M -t 16 $ref_fasta $fastq_dir/${species_abbr}_${sample}_R1.fastq.gz $fastq_dir/${species_abbr}_${sample}_R2.fastq.gz > $main_dir/${sample}.sam
 
 echo "Converting sam to bam"
 
@@ -173,7 +237,7 @@ samtools index $main_dir/${sample}_sorted.bam
 
 echo "Running Picard AddOrReplaceReadGroups..."
 
-java -jar /opt/biotools/picard/picard.jar AddOrReplaceReadGroups \\
+picard AddOrReplaceReadGroups \\
 I=$main_dir/${sample}_sorted.bam \\
 O=$main_dir/${sample}_sorted.rg.bam \\
 RGID=4 \\
@@ -185,70 +249,65 @@ CREATE_INDEX=true
 
 echo "Running Picard MarkDuplicates..."
 
-java -Xmx6g -jar /opt/biotools/picard/picard.jar MarkDuplicates \\
+picard MarkDuplicates \\
 I=$main_dir/${sample}_sorted.rg.bam \\
 O=$main_dir/${sample}_sorted.rg.md.bam \\
 M=$main_dir/${sample}_sorted.rg.md.metrics.txt \\
 CREATE_INDEX=true
 
-echo "Running GATK RealignerTargetCreator..."
-
-java -Xmx12g -jar $gatk_dir/GenomeAnalysisTK.jar \\
-        -T RealignerTargetCreator \\
-        -R $ref_fasta \\
-        -I $main_dir/${sample}_sorted.rg.md.bam \\
-        -o $main_dir/${sample}_sorted.rg.md.intervals
-
-echo "Running GATK IndelRealigner..."
-
-java -Xmx12g -jar $gatk_dir/GenomeAnalysisTK.jar \\
-        -T IndelRealigner \\
-        -R $ref_fasta \\
-        -I $main_dir/${sample}_sorted.rg.md.bam \\
-        -targetIntervals $main_dir/${sample}_sorted.rg.md.intervals \\
-        -o $main_dir/${sample}_sorted.rg.md.ir.bam
-
-# Skipping BaseRecalibrator
+# Skip BaseRecalibrator
 
 echo "Running GATK PrintReads..."
 
-java -Xmx12g -jar $gatk_dir/GenomeAnalysisTK.jar \\
-        -T PrintReads \\
+gatk PrintReads \\
         -R $ref_fasta \\
-        -I $main_dir/${sample}_sorted.rg.md.ir.bam \\
-        --read_filter MappingQualityZero \\
-        -o $main_dir/${sample}.ready.bam
+        -I $main_dir/${sample}_sorted.rg.md.bam \\
+        --read-filter MappingQualityNotZeroReadFilter \\
+        -O $main_dir/${sample}.ready.bam
 
 echo "Done!"
 '''
 
-f = open("qsub_1_align", 'w')
+f = open("sbatch_0_bwa", 'w')
+f.write(qsub_0_bwa_str)
+f.close()
+
+f = open("sbatch_1_align", 'w')
 f.write(qsub_1_align_str)
 f.close()
 
 qsub_cnv_analysis_str = \
 f'''#!/bin/sh
-#PBS -A winzeler-group
-#PBS -N {JOB_NAME}_CNV_analysis
-#PBS -l nodes=1:ppn=8,walltime=08:00:00
-#PBS -o {LOG_DIR}
-#PBS -e {LOG_DIR}
-#PBS -M {EMAIL}
-#PBS -m {EMAIL_OPTIONS}
-#PBS -t 1-{num_samples}
+#SBATCH --job-name {JOB_NAME}_CNV_analysis
+#SBATCH --partition=hotel
+#SBATCH --nodes=1
+#SBATCH --mem-per-cpu=8G
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=08:00:00
+#SBATCH --qos=hotel
+#SBATCH --account={ACCOUNT}
+#SBATCH --export=ALL
+#SBATCH --output {LOG_DIR}/slurm-%j.out-%N
+#SBATCH --output {LOG_DIR}/slurm-%j.err-%N
+#SBATCH --mail-type {EMAIL_OPTIONS}
+#SBATCH --mail-user {EMAIL}
+#SBATCH --array=1-{num_samples}
 
 . {CONFIG_PATH}
 
-gatk_path=/opt/biotools/GenomeAnalysisTK/4.0.11.0/gatk-package-4.0.11.0-local.jar
-pon_path=/projects/winzeler/ANALYSIS/DNAseq/Madeline/GATK_CNV/PON/{STRAIN}cnv.pon.hdf5
-interval_list_path=/projects/winzeler/ANALYSIS/DNAseq/Madeline/GATK_CNV/references/p_fal.preprocessed.interval_list
+module load shared
+module load gatk
+
+gatk_cnv_dir=/tscc/projects/ps-winzelerlab/GENOME_RESOURCES/p_fal/GATK_CNV
+pon_path=$gatk_cnv_dir/PON/{STRAIN}cnv.pon.hdf5
+interval_list_path=$gatk_cnv_dir/references/{SPECIES_ABBR}.preprocessed.interval_list
 '''
 
 qsub_cnv_analysis_str += \
 '''
 readarray samples < $samples_file
 samples=(null ${samples[@]}) # zero to one start index
-sample=${samples[$PBS_ARRAYID]}
+sample=${samples[$SLURM_ARRAY_TASK_ID]}
 echo $sample
 
 echo "Working on sample $sample"
@@ -256,14 +315,14 @@ echo "Working on sample $sample"
 bam_path=$main_dir/${sample}.ready.bam
 
 echo "Collecting read counts..."
-java -jar $gatk_path CollectReadCounts \
+gatk CollectReadCounts \
         -I $bam_path \
         -L $interval_list_path \
         --interval-merging-rule OVERLAPPING_ONLY \
         -O $main_dir/${sample}.counts.hdf5
 
 echo "Denoising read counts..."
-java -jar $gatk_path DenoiseReadCounts \
+gatk DenoiseReadCounts \
         -I $main_dir/${sample}.counts.hdf5 \
         --count-panel-of-normals $pon_path \
         --standardized-copy-ratios $main_dir/${sample}.standardizedCR.tsv \
@@ -272,6 +331,6 @@ java -jar $gatk_path DenoiseReadCounts \
 echo "Done"
 '''
 
-f = open("qsub_cnv_analysis", 'w')
+f = open("sbatch_cnv_analysis", 'w')
 f.write(qsub_cnv_analysis_str)
 f.close()

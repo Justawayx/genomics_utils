@@ -52,16 +52,16 @@ class GenomeAnnotation:
 		self.gene_MFS_dict = gene_MFS_dict
 	
 	def load_alphafold_data(self):
-		
+		protein_aa_info_dict = {}
 		if self.species == 'p_fal' and self.strain == '3D7':
-			protein_aa_info_dict = pickle.load(open('%s/ROTATION_PROJECT/daisy/REF_DATA/pfal/protein_aa_info_dict.pkl' % self.WDIR, 'rb'))
+			protein_aa_info_dict = pickle.load(open('%s/PROJECTS/daisy/REF_DATA/p_fal/protein_aa_info_dict.pkl' % self.WDIR, 'rb'))
 		
 		return protein_aa_info_dict
 	
 	def load_parsed_GFF(self):
 		
 		if self.species == 'p_fal':
-			gff_fpath = "%s/GENOME_RESOURCES/pf/Pf%s_PlasmoDB_66/PlasmoDB-66_Pfalciparum%s.gff" % (self.WDIR, self.strain, self.strain)
+			gff_fpath = "%s/GENOME_RESOURCES/p_fal/Pf%s_PlasmoDB_66/PlasmoDB-66_Pfalciparum%s.gff" % (self.WDIR, self.strain, self.strain)
 		
 		chrom_feature_data_dict = defaultdict(dict) # chrom -> (feature type, feature ID) -> (start, end, strand_direction, info_dict)
 		
@@ -77,7 +77,7 @@ class GenomeAnnotation:
 		return chrom_feature_data_dict
 	
 	def load_mutagenesis_data(self):
-		f = open('%s/ROTATION_PROJECT/daisy/REF_DATA/pfal/NIHMS1004827-supplement-Table_S5.txt' % self.WDIR, 'rt')
+		f = open('%s/PROJECTS/daisy/REF_DATA/p_fal/NIHMS1004827-supplement-Table_S5.txt' % self.WDIR, 'rt')
 		gene_MIS_dict = {}
 		gene_MFS_dict = {}
 		f.readline(); header = f.readline()
@@ -91,7 +91,7 @@ class GenomeAnnotation:
 	
 	def load_GO_data(self):
 		
-		f = open('%s/ROTATION_PROJECT/daisy/REF_DATA/GO/go-basic.obo' % self.WDIR, 'r')
+		f = open('%s/PROJECTS/daisy/REF_DATA/GO/go-basic.obo' % self.WDIR, 'r')
 		GO_term_info_dict = {}
 		term_start = False
 		for line in f:
@@ -112,7 +112,7 @@ class GenomeAnnotation:
 								key = items[0]; value = ': '.join(items[1:])
 								key_value_dict[key].append(value)
 		
-		f = open('%s/GENOME_RESOURCES/pf/Pf%s_PlasmoDB_66/PlasmoDB-66_Pfalciparum%s_GO.gaf' % (self.WDIR, self.strain, self.strain), 'r')
+		f = open('%s/GENOME_RESOURCES/p_fal/Pf%s_PlasmoDB_66/PlasmoDB-66_Pfalciparum%s_GO.gaf' % (self.WDIR, self.strain, self.strain), 'r')
 		f.readline()
 		
 		gene_id_GO_dict = defaultdict(dict) # gene ID -> (GO ID, evidence_code, GO name, GO def)
@@ -130,7 +130,7 @@ class GenomeAnnotation:
 	
 	def load_codon_usage(self):
 		
-		f = open("%s/GENOME_RESOURCES/pf/Pf%s_PlasmoDB_66/PlasmoDB-66_Pfalciparum%s_CodonUsage.txt" % (self.WDIR, self.strain, self.strain), 'r')
+		f = open("%s/GENOME_RESOURCES/p_fal/Pf%s_PlasmoDB_66/PlasmoDB-66_Pfalciparum%s_CodonUsage.txt" % (self.WDIR, self.strain, self.strain), 'r')
 		header_items = f.readline()
 		aa_codon_usage_ab_dict = defaultdict(dict)
 		for line in f:
@@ -158,7 +158,7 @@ class GenomeAnnotation:
 
 	def get_gene_class_dict(self):
 		
-		f = open('%s/ROTATION_PROJECT/daisy/Winzeler_databases/PlasmDBv29AnnotationsforMZstudy.txt' % self.WDIR, 'r')
+		f = open('%s/PROJECTS/daisy/Winzeler_databases/PlasmDBv29AnnotationsforMZstudy.txt' % self.WDIR, 'r')
 		header_items = f.readline().strip('\n').split('\t')
 		
 		gene_class_dict = {}
