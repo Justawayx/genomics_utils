@@ -68,17 +68,7 @@ class GenomeAnnotation:
 			("t_cru", "SylvioX10"): f"{WDIR}/GENOME_RESOURCES/t_cru/TcSylvioX10-1_TriTypDB_67/TriTrypDB-67_TcruziSylvioX10-1.gff",
 		}
 		
-		self.alphafold_data = self.load_alphafold_data()
 		self.chrom_feature_data_dict = self.load_parsed_GFF()
-		self.aa_codon_usage_ab_dict = self.load_codon_usage()
-		
-		gene_GO_dict, gene_abbr_dict = self.load_GO_data()
-		self.gene_GO_dict = gene_GO_dict
-		self.gene_abbr_dict = gene_abbr_dict
-		
-		gene_MIS_dict, gene_MFS_dict = self.load_mutagenesis_data()
-		self.gene_MIS_dict = gene_MIS_dict
-		self.gene_MFS_dict = gene_MFS_dict
 	
 	def load_alphafold_data(self):
 		protein_aa_info_dict = {}
