@@ -7,18 +7,42 @@ from urllib.parse import unquote
 
 # Helper functions
 
-def parse_info(info_str):
+def parse_info(info_str): # Parses INFO string of format key1=val1;key2=val2;...
 	info_dict = {}
 	for key_value_pair in info_str.strip('\n').split(';'):
 		key, value = key_value_pair.split('=')
 		info_dict[key] = value
 	return info_dict
 
-SPECIES_SNPEFF_ID_DICT = {"p_fal": "Pf3D7v3"}
+def parse_GFF(gff_fpath): # Parses any GFF3 file
+	chrom_feature_data_dict = defaultdict(dict) # chrom -> (feature type, feature ID) -> (start, end, strand_direction, info_dict)	
+	for line in open(gff_fpath, 'r'):
+		if line.strip() == '##FASTA':
+			break
+		if line[0] == '#':
+			continue
+		chrom, source, feature_type, start_pos, end_pos, _, sdirection, _, info = line.strip().split('\t')
+		start_pos = int(start_pos); end_pos = int(end_pos); info_dict = parse_info(info); feature_id = info_dict['ID']			
+		chrom_feature_data_dict[chrom][(feature_type, feature_id)] = (start_pos, end_pos, sdirection, info_dict)	
+	return chrom_feature_data_dict
+
+def get_feature_desc_dict(chrom_feature_data_dict, desired_feature_type):
+	feature_desc_dict = {}	
+	for chrom in chrom_feature_data_dict:
+		for feature_type, feature_id in chrom_feature_data_dict[chrom]:
+			start, end, strand_direction, info_dict = chrom_feature_data_dict[chrom][(feature_type, feature_id)]
+			if feature_type == desired_feature_type:
+				feature_desc_dict[feature_id] = unquote(info_dict["description"]).replace('+', ' ')
+	return feature_desc_dict
+
+SPECIES_SNPEFF_ID_DICT = {
+	("p_fal", "3D7"): "Pf3D7v3",
+	("t_cru", "SylvioX10"): "TcSylvioX10v67",
+}
 
 '''
 usage for now
-x = test.GenomeAnnotation('/storage/NFS', 'p_fal', '3D7')
+x = test.GenomeAnnotation('/tscc/projects/ps-winzelerlab', 'p_fal', '3D7')
 protein_aa_info_dict = x.alphafold_data
 aa_codon_usage_ab_dict = x.aa_codon_usage_ab_dict
 gene_desc_dict = x.get_gene_desc_dict()
@@ -32,12 +56,17 @@ gene_MFS_dict = x.gene_MFS_dict
 
 class GenomeAnnotation:
 	
-	def __init__(self, winzeler_directory, species_abbr, strain):
+	def __init__(self, WDIR, species_abbr, strain):
 		
 		# Ex: GenomeAnnotation('/projects/winzeler', 'p_fal', '3D7')		
-		self.WDIR = winzeler_directory
+		self.WDIR = WDIR
 		self.species = species_abbr
 		self.strain = strain
+		
+		self.GFF_PATH_MAP = {
+			("p_fal", "3D7"): f"{WDIR}/GENOME_RESOURCES/p_fal/p_fal_ref/p_fal.gff",
+			("t_cru", "SylvioX10"): f"{WDIR}/GENOME_RESOURCES/t_cru/TcSylvioX10-1_TriTypDB_67/TriTrypDB-67_TcruziSylvioX10-1.gff",
+		}
 		
 		self.alphafold_data = self.load_alphafold_data()
 		self.chrom_feature_data_dict = self.load_parsed_GFF()
@@ -58,23 +87,9 @@ class GenomeAnnotation:
 		
 		return protein_aa_info_dict
 	
-	def load_parsed_GFF(self):
-		
-		if self.species == 'p_fal':
-			gff_fpath = "%s/GENOME_RESOURCES/p_fal/Pf%s_PlasmoDB_66/PlasmoDB-66_Pfalciparum%s.gff" % (self.WDIR, self.strain, self.strain)
-		
-		chrom_feature_data_dict = defaultdict(dict) # chrom -> (feature type, feature ID) -> (start, end, strand_direction, info_dict)
-		
-		for line in open(gff_fpath, 'r'):
-			if line.strip() == '##FASTA':
-				break
-			if line[0] == '#':
-				continue
-			chrom, source, feature_type, start_pos, end_pos, _, sdirection, _, info = line.strip().split('\t')
-			start_pos = int(start_pos); end_pos = int(end_pos); info_dict = parse_info(info); feature_id = info_dict['ID']			
-			chrom_feature_data_dict[chrom][(feature_type, feature_id)] = (start_pos, end_pos, sdirection, info_dict)
-		
-		return chrom_feature_data_dict
+	def load_parsed_GFF(self):		
+		gff_fpath = self.GFF_PATH_MAP[(self.species, self.strain)]
+		return parse_GFF(gff_fpath)
 	
 	def load_mutagenesis_data(self):
 		f = open('%s/PROJECTS/daisy/REF_DATA/p_fal/NIHMS1004827-supplement-Table_S5.txt' % self.WDIR, 'rt')
@@ -140,49 +155,11 @@ class GenomeAnnotation:
 		
 		return aa_codon_usage_ab_dict
 	
-	def get_gene_desc_dict(self):
-		
-		chrom_feature_data_dict = self.chrom_feature_data_dict
-		gene_desc_dict = {}
-		
-		for chrom in chrom_feature_data_dict:
-			for feature_type, feature_id in chrom_feature_data_dict[chrom]:
-				start, end, strand_direction, info_dict = chrom_feature_data_dict[chrom][(feature_type, feature_id)]
-				if feature_type == 'protein_coding_gene':
-					gene_desc_dict[feature_id] = unquote(info_dict["description"]).replace('+', ' ')
-		
-		return gene_desc_dict
+	def get_gene_desc_dict(self):		
+		return get_feature_desc_dict(self.chrom_feature_data_dict, 'protein_coding_gene')
 	
 	def get_chromosomes(self):
 		return sorted(self.chrom_feature_data_dict.keys())
-
-	def get_gene_class_dict(self):
-		
-		f = open('%s/PROJECTS/daisy/Winzeler_databases/PlasmDBv29AnnotationsforMZstudy.txt' % self.WDIR, 'r')
-		header_items = f.readline().strip('\n').split('\t')
-		
-		gene_class_dict = {}
-		
-		possible_target_classes = set()
-		likely_target_values = set()
-		nontarget_classes = set()
-		
-		for line in f:
-				items = line.strip('\n').split('\t')
-				gene_id = items[0]
-				nonessential = items[header_items.index('Nonessential')]
-				class_field = items[header_items.index('Class')]
-				category_field = items[header_items.index('Category')]
-				target_class = items[header_items.index('Target Class')]
-				likely_target = items[header_items.index('Field 24')]
-				if likely_target == 'no' or target_class == 'Not Predicted Target':
-						nontarget_classes.add(target_class)
-				else:
-						likely_target_values.add(likely_target)
-						possible_target_classes.add(target_class)
-				gene_class_dict[gene_id] = (nonessential, target_class, likely_target, class_field, category_field)
-		
-		return gene_class_dict
 
 # General utility functions
 aa3_to_aa1_dict = {"Ala": "A", "Arg": "R", "Asn": "N", "Asp": "D", "Cys": "C", "Glu": "E", "Gln": "Q", "Gly": "G", 
