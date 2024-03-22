@@ -78,16 +78,16 @@ with open(REF_FASTA_PATH, 'r') as f:
 	for line in f:
 		if line.startswith('>'):
 			if chrom != 'dummy':
-				chrom_length_dict[chrom] = len(seq)
-				chromosome_boundaries_ordered.append(chromosome_boundaries_ordered[-1] + len(seq))
+				chrom_length_dict[chrom] = seq_len
+				chromosome_boundaries_ordered.append(chromosome_boundaries_ordered[-1] + seq_len)
 				chromosomes_ordered.append(chrom)
-			seq = ''
+			seq_len = 0
 			chrom = line[1:].split('|')[0].split(' ')[0]
 		else:
-			seq += line.strip('\n')
+			seq_len += len(line.strip('\n'))
 
-chrom_length_dict[chrom] = len(seq)
-chromosome_boundaries_ordered.append(chromosome_boundaries_ordered[-1] + len(seq))
+chrom_length_dict[chrom] = seq_len
+chromosome_boundaries_ordered.append(chromosome_boundaries_ordered[-1] + seq_len)
 chromosomes_ordered.append(chrom)
 
 print(sorted(chrom_length_dict.items()))

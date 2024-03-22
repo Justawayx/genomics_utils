@@ -20,9 +20,10 @@ def get_env_value_from_config(env_variable):
 	print("Environmental variable %s not found in config.cfg" % env_variable)
 	return False
 
-WDIR = "/projects/winzeler"
+WDIR = "/tscc/projects/ps-winzelerlab"
 SAMPLES_PATH = get_env_value_from_config('samples_file')
 MAIN_DIR = get_env_value_from_config('main_dir')
+STRAIN = get_env_value_from_config('strain')
 SPECIES_ABBR = get_env_value_from_config('species_abbr')
 GROUP_NAME = get_env_value_from_config('group_name')
 
@@ -34,7 +35,7 @@ while answer not in samples:
 
 PARENT_SAMPLE = answer
 
-SNPEFF_DIR = f"{WDIR}/GENOME_RESOURCES/snpEff"
+SNPEFF_DIR = f"{WDIR}/TOOLS/snpEff"
 
 def get_format_data_dict(FORMAT, data):
 	return {key: val for key, val in zip(FORMAT.split(':'), data.split(':'))}
@@ -51,9 +52,10 @@ def parse_info(INFO):
 # Load gene annotations
 # =======================
 
-species_refstrain_dict = {'p_fal': '3D7'}
+species_ref_strain_map = {'p_fal': '3D7', 't_cru': 'SylvioX10'}
 
-ga = genome_utils.GenomeAnnotation(WDIR, SPECIES_ABBR, species_refstrain_dict[SPECIES_ABBR])
+ref_strain = species_ref_strain_map[SPECIES_ABBR]
+ga = genome_utils.GenomeAnnotation(WDIR, SPECIES_ABBR, ref_strain)
 gene_desc_dict = ga.get_gene_desc_dict()
 
 # =======================
@@ -121,7 +123,7 @@ if ann_exists_flag:
 		ann_exists_flag = False # If yes, pretend it doesn't exist
 
 if not ann_exists_flag:
-	SNPEFF_SPECIES_ID = genome_utils.SPECIES_SNPEFF_ID_DICT[SPECIES_ABBR]
+	SNPEFF_SPECIES_ID = genome_utils.SPECIES_SNPEFF_ID_DICT[(SPECIES_ABBR, ref_strain)]
 	os.chdir(MAIN_DIR)
 	cmd = f"java -jar {SNPEFF_DIR}/snpEff.jar -formatEFF -o vcf -ud 1000 -c {SNPEFF_DIR}/snpEff.config {SNPEFF_SPECIES_ID} {MAIN_DIR}/{VCF} > {MAIN_DIR}/{VCF}.ann.txt"
 	print(cmd)
