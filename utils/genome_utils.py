@@ -22,22 +22,26 @@ def parse_GFF(gff_fpath): # Parses any GFF3 file
 		if line[0] == '#':
 			continue
 		chrom, source, feature_type, start_pos, end_pos, _, sdirection, _, info = line.strip().split('\t')
-		start_pos = int(start_pos); end_pos = int(end_pos); info_dict = parse_info(info); feature_id = info_dict['ID']			
+		start_pos = int(start_pos); end_pos = int(end_pos); info_dict = parse_info(info)
+		if 'ID' not in info_dict:
+			continue
+		feature_id = info_dict['ID']			
 		chrom_feature_data_dict[chrom][(feature_type, feature_id)] = (start_pos, end_pos, sdirection, info_dict)	
 	return chrom_feature_data_dict
 
-def get_feature_desc_dict(chrom_feature_data_dict, desired_feature_type):
-	feature_desc_dict = {}	
+def get_feature_desc_dict(species, chrom_feature_data_dict, desired_feature_type):
+	feature_desc_dict = {}
 	for chrom in chrom_feature_data_dict:
 		for feature_type, feature_id in chrom_feature_data_dict[chrom]:
 			start, end, strand_direction, info_dict = chrom_feature_data_dict[chrom][(feature_type, feature_id)]
 			if feature_type == desired_feature_type:
-				feature_desc_dict[feature_id] = unquote(info_dict["description"]).replace('+', ' ')
+				feature_desc_dict[feature_id] = unquote(info_dict['description']).replace('+', ' ')
 	return feature_desc_dict
 
 SPECIES_SNPEFF_ID_DICT = {
 	("p_fal", "3D7"): "Pf3D7v3",
 	("t_cru", "SylvioX10"): "TcSylvioX10v67",
+    ("s_cer", "R64"): "R64-1-1.75",
 }
 
 '''
@@ -66,6 +70,7 @@ class GenomeAnnotation:
 		self.GFF_PATH_MAP = {
 			("p_fal", "3D7"): f"{WDIR}/GENOME_RESOURCES/p_fal/p_fal_ref/p_fal.gff",
 			("t_cru", "SylvioX10"): f"{WDIR}/GENOME_RESOURCES/t_cru/TcSylvioX10-1_TriTypDB_67/TriTrypDB-67_TcruziSylvioX10-1.gff",
+            ("s_cer", "R64"): f"{WDIR}/GENOME_RESOURCES/s_cer/ScS288C_SGD_R64-4-1/saccharomyces_cerevisiae_R64-4-1_20230830.gff",
 		}
 		
 		self.chrom_feature_data_dict = self.load_parsed_GFF()
@@ -145,8 +150,20 @@ class GenomeAnnotation:
 		
 		return aa_codon_usage_ab_dict
 	
-	def get_gene_desc_dict(self):		
-		return get_feature_desc_dict(self.chrom_feature_data_dict, 'protein_coding_gene')
+	def get_gene_desc_dict(self):
+		if self.species == 's_cer':
+			gene_desc_dict = {}
+			with open('%s/GENOME_RESOURCES/s_cer/yeast_genes.tsv' % self.WDIR, 'r') as f:
+				header = f.readline()
+				for line in f:
+					gene_SGD_ID, gene_ID, _, symbol, name = line.strip('\n').split('\t')
+					if symbol == '""':
+						gene_desc_dict[gene_ID] = name.strip('"')
+					else:
+						gene_desc_dict[symbol] = name.strip('"')
+			return gene_desc_dict
+		else:
+			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'gene')
 	
 	def get_chromosomes(self):
 		return sorted(self.chrom_feature_data_dict.keys())

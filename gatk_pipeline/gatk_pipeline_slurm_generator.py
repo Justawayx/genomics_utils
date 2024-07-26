@@ -13,7 +13,7 @@ import os, sys
 # Change these
 
 ACCOUNT = "htl124"
-LOG_DIR = "/tscc/lustre/scratch/dwc001/logs"
+LOG_DIR = "/tscc/lustre/ddn/scratch/dwc001/logs"
 EMAIL = "dwc001@ucsd.edu"
 EMAIL_OPTIONS = "END"
 

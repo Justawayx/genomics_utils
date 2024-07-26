@@ -1,5 +1,5 @@
 from collections import defaultdict
-import os, sys
+import os, sys, numpy as np
 from urllib.parse import unquote
 from utils import genome_utils
 from tqdm import tqdm
@@ -53,7 +53,7 @@ def parse_info(INFO):
 # Load gene annotations
 # =======================
 
-species_ref_strain_map = {'p_fal': '3D7', 't_cru': 'SylvioX10'}
+species_ref_strain_map = {'p_fal': '3D7', 't_cru': 'SylvioX10', 's_cer': 'R64'}
 
 ref_strain = species_ref_strain_map[SPECIES_ABBR]
 ga = genome_utils.GenomeAnnotation(WDIR, SPECIES_ABBR, ref_strain)
@@ -275,7 +275,8 @@ for sample in ordered_samples:
     header_items.append("%s_AlleleDepths" % sample)
 
 header_items.append("Has_NonHet")
-header_items.append("Has_GoodP")
+header_items.append("Best_AAF_diff")
+header_items.append("Best_Pvalue")
 
 f.write('\t'.join(header_items) + '\n')
 
@@ -311,15 +312,22 @@ for chrom in chrom_pos_sample_data_dict:
         
         has_non_het = False
         has_good_pvalue = False
+        all_pvalues = []
+        all_AAF_diffs = []
         for AD, GT, AAF, pvalue in zip(ADs, GTs, AAFs, pvalues):
-            if pvalue != '.' and pvalue <= 0.05 and np.abs(AAF - AAFs[0]) > 0.4:
-                has_good_pvalue = True
+            if pvalue != '.':
+                all_pvalues.append(pvalue)
+                all_AAF_diffs.append(np.abs(AAF - AAFs[0]))
+                if pvalue <= 0.05 and np.abs(AAF - AAFs[0]) > 0.4:
+                    has_good_pvalue = True
             if not GT.startswith('0/') and AD != "LowDP":
                 has_non_het = True
         
         items.append(has_non_het)
-        items.append(has_good_pvalue)
-        f.write('\t'.join([str(item) for item in items]) + '\n')
+        items.append(max(all_AAF_diffs))
+        items.append(min(all_pvalues))
+        if has_good_pvalue:
+            f.write('\t'.join([str(item) for item in items]) + '\n')
 
 f.close()
 
