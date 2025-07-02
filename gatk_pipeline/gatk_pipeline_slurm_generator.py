@@ -42,13 +42,18 @@ FASTQ_DIR = get_env_value_from_config('fastq_dir')
 SPECIES_ABBR = get_env_value_from_config('species_abbr')
 REF_FASTA_PATH = f"{get_env_value_from_config('ref_dir')}/{get_env_value_from_config('ref_fasta').split('/')[-1]}"
 
+# Fastq file name parameters
+FASTQ_PREFIX = SPECIES_ABBR + '_'
+FASTQ_SUFFIX = '_R'
+FASTQ_GZIP_SUFFIX = '.gz'
+
 samples = [line.strip() for line in open(SAMPLES_PATH, 'r') if line.strip() != '']
 num_samples = len(samples)
 
 fastqgz_sizes = []
 for sample in samples:
 	for readnum in [1,2]:
-		fastq_path = f"{FASTQ_DIR}/{SPECIES_ABBR}_{sample}_R{readnum}.fastq.gz"
+		fastq_path = f"{FASTQ_DIR}/{FASTQ_PREFIX}{sample}{FASTQ_SUFFIX}{readnum}.fastq{FASTQ_GZIP_SUFFIX}"
 		try:
 			fastqgz_sizes.append(os.path.getsize(fastq_path))
 		except:
@@ -63,12 +68,12 @@ biggest_fastqgz_size = max(fastqgz_sizes)
 # qsub_2: total 36 GB, 10 samples took around 160 hours, 63 GB, 4 samples took 92 hours
 
 qsub_1_walltime_hours = int((biggest_fastqgz_size/1_000_000_000.0)*3) + 20
-qsub_2_total_walltime_hours = int((total_fastqgz_size/1_000_000_000.0)*5) + 10
-qsub_2_walltime_hours = 20 # Should be big to be safe
+qsub_2_total_walltime_hours = int((total_fastqgz_size/1_000_000_000.0)*5) + 40
+qsub_2_walltime_hours = 88 # Should be big to be safe
 
 # Number of separate qsub_2 scripts
 
-num_qsub_2_scripts = (qsub_2_total_walltime_hours//qsub_2_walltime_hours) + 4
+num_qsub_2_scripts = (qsub_2_total_walltime_hours//qsub_2_walltime_hours) + 8
 
 chrom_length_dict = {}
 chromosome_boundaries_ordered = [0]
@@ -124,8 +129,8 @@ f'''#!/bin/sh
 #SBATCH --qos=hotel
 #SBATCH --account={ACCOUNT}
 #SBATCH --export=ALL
-#SBATCH --output {LOG_DIR}/slurm-%j.out-%N
-#SBATCH --output {LOG_DIR}/slurm-%j.err-%N
+#SBATCH --output {LOG_DIR}/slurm-%j.%x.out-%N
+#SBATCH --output {LOG_DIR}/slurm-%j.%x.err-%N
 #SBATCH --mail-type {EMAIL_OPTIONS}
 #SBATCH --mail-user {EMAIL}
 
@@ -157,8 +162,8 @@ f'''#!/bin/sh
 #SBATCH --qos=hotel
 #SBATCH --account={ACCOUNT}
 #SBATCH --export=ALL
-#SBATCH --output {LOG_DIR}/slurm-%j.out-%N
-#SBATCH --output {LOG_DIR}/slurm-%j.err-%N
+#SBATCH --output {LOG_DIR}/slurm-%A_%a.%x.out-%N
+#SBATCH --output {LOG_DIR}/slurm-%A_%a.%x.err-%N
 #SBATCH --mail-type {EMAIL_OPTIONS}
 #SBATCH --mail-user {EMAIL}
 #SBATCH --array=1-{num_samples}
@@ -181,24 +186,24 @@ echo $sample
 
 echo "Running bwa mem..."
 
-/tscc/projects/ps-winzelerlab/TOOLS/bin/bwa mem -M -t 16 $ref_fasta $fastq_dir/${species_abbr}_${sample}_R1.fastq.gz $fastq_dir/${species_abbr}_${sample}_R2.fastq.gz > $main_dir/${sample}.sam
+/tscc/projects/ps-winzelerlab/TOOLS/bin/bwa mem -M -t 16 $ref_fasta $fastq_dir/%s${sample}%s1.fastq%s $fastq_dir/%s${sample}%s2.fastq%s > $main_dir/${sample}.sam
 
 echo "Done!"
-'''
+''' % (FASTQ_PREFIX, FASTQ_SUFFIX, FASTQ_GZIP_SUFFIX, FASTQ_PREFIX, FASTQ_SUFFIX, FASTQ_GZIP_SUFFIX)
 
 qsub_1_align_str = \
 f'''#!/bin/sh
 #SBATCH --job-name {JOB_NAME}_align
 #SBATCH --partition=hotel
 #SBATCH --nodes=1
-#SBATCH --mem-per-cpu=16
+#SBATCH --mem-per-cpu=16GB
 #SBATCH --ntasks-per-node=1
 #SBATCH --time={qsub_1_walltime_hours}:00:00 
 #SBATCH --qos=hotel
 #SBATCH --account={ACCOUNT}
 #SBATCH --export=ALL
-#SBATCH --output {LOG_DIR}/slurm-%j.out-%N
-#SBATCH --output {LOG_DIR}/slurm-%j.err-%N
+#SBATCH --output {LOG_DIR}/slurm-%A_%a.%x.out-%N
+#SBATCH --output {LOG_DIR}/slurm-%A_%a.%x.err-%N
 #SBATCH --mail-type {EMAIL_OPTIONS}
 #SBATCH --mail-user {EMAIL}
 #SBATCH --array=1-{num_samples}

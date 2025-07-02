@@ -35,13 +35,18 @@ def get_feature_desc_dict(species, chrom_feature_data_dict, desired_feature_type
 		for feature_type, feature_id in chrom_feature_data_dict[chrom]:
 			start, end, strand_direction, info_dict = chrom_feature_data_dict[chrom][(feature_type, feature_id)]
 			if feature_type == desired_feature_type:
-				feature_desc_dict[feature_id] = unquote(info_dict['description']).replace('+', ' ')
+				if feature_type == 'exon':
+					feature_desc_dict[feature_id] = unquote(info_dict['product']).replace('+', ' ')
+				else:
+					feature_desc_dict[feature_id] = unquote(info_dict['description']).replace('+', ' ')
 	return feature_desc_dict
 
+# ADD NEW GENOME INFO HERE
 SPECIES_SNPEFF_ID_DICT = {
 	("p_fal", "3D7"): "Pf3D7v3",
 	("t_cru", "SylvioX10"): "TcSylvioX10v67",
     ("s_cer", "R64"): "R64-1-1.75",
+    ("l_don", "BPK282A1"): "Ld_BPK282A1",
 }
 
 '''
@@ -67,10 +72,12 @@ class GenomeAnnotation:
 		self.species = species_abbr
 		self.strain = strain
 		
+        # ADD NEW GENOME INFO HERE
 		self.GFF_PATH_MAP = {
 			("p_fal", "3D7"): f"{WDIR}/GENOME_RESOURCES/p_fal/p_fal_ref/p_fal.gff",
 			("t_cru", "SylvioX10"): f"{WDIR}/GENOME_RESOURCES/t_cru/TcSylvioX10-1_TriTypDB_67/TriTrypDB-67_TcruziSylvioX10-1.gff",
             ("s_cer", "R64"): f"{WDIR}/GENOME_RESOURCES/s_cer/ScS288C_SGD_R64-4-1/saccharomyces_cerevisiae_R64-4-1_20230830.gff",
+            ("l_don", "BPK282A1"): f"{WDIR}/GENOME_RESOURCES/l_don/GCF_000227135.1_ASM22713v2/GCF_000227135.1_ASM22713v2_genomic.gff"
 		}
 		
 		self.chrom_feature_data_dict = self.load_parsed_GFF()
@@ -162,6 +169,8 @@ class GenomeAnnotation:
 					else:
 						gene_desc_dict[symbol] = name.strip('"')
 			return gene_desc_dict
+		elif self.species == 'l_don':
+			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'exon')
 		else:
 			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'gene')
 	

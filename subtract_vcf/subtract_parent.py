@@ -8,33 +8,31 @@ from tqdm import tqdm
 # Parameters
 # =======================
 
-CONFIG_PATH = os.path.abspath('config.cfg')
+WDIR = '/tscc/projects/ps-winzelerlab'
+SPECIES_ABBR = 'p_fal'
 
-def get_env_value_from_config(env_variable):
-    for line in open(CONFIG_PATH, 'r'):
-        if line.startswith('#'):
-            continue
-        if '=' in line:
-            key, value = line.rstrip('\n').split('=')
-            if key == env_variable:
-                return value
-    print("Environmental variable %s not found in config.cfg" % env_variable)
-    return False
+VCF_NAME = input("Input annotated VCF name: ")
+GROUP_NAME = input("Input group name: ")
 
-WDIR = "/tscc/projects/ps-winzelerlab"
-SAMPLES_PATH = get_env_value_from_config('samples_file')
-MAIN_DIR = get_env_value_from_config('main_dir')
-STRAIN = get_env_value_from_config('strain')
-SPECIES_ABBR = get_env_value_from_config('species_abbr')
-GROUP_NAME = get_env_value_from_config('group_name')
+for line in open(VCF_NAME, 'r'):
+    if line.startswith('#CHROM'):
+        samples = line.strip().split('\t')[9:]
 
-samples = [line.strip() for line in open(SAMPLES_PATH, 'r')]
 print("Here are the sample names:\n\t" + '\n\t'.join(samples))
 answer = input("Enter name of the parent sample: ")
 while answer not in samples:
     answer = input("%s is not in samples.txt, please try again: " % answer)
 
 PARENT_SAMPLE = answer
+
+samples_to_exclude = []
+answer = input("Enter name of sample to exclude: ")
+if answer in samples:
+    samples_to_exclude.append(answer)
+while answer in samples:
+    answer = input("Enter name of sample to exclude: ")
+    if answer in samples:
+        samples_to_exclude.append(answer)
 
 SNPEFF_DIR = f"{WDIR}/TOOLS/snpEff"
 
@@ -53,7 +51,7 @@ def parse_info(INFO):
 # Load gene annotations
 # =======================
 
-species_ref_strain_map = {'p_fal': '3D7', 't_cru': 'SylvioX10', 's_cer': 'R64', 'l_don': 'BPK282A1'}
+species_ref_strain_map = {'p_fal': '3D7', 't_cru': 'SylvioX10', 's_cer': 'R64'}
 
 ref_strain = species_ref_strain_map[SPECIES_ABBR]
 ga = genome_utils.GenomeAnnotation(WDIR, SPECIES_ABBR, ref_strain)
@@ -82,83 +80,10 @@ def AD_to_AAF(AD):
     return sum(depths[1:])/sum(depths)
 
 # =======================
-# Combine VCFs
-# =======================
-
-sbatch_2_last_part = max([int(fname.split('-part')[1]) for fname in os.listdir('.') if fname.startswith('sbatch_2')])
-
-vcf_path = f"{MAIN_DIR}/{GROUP_NAME}.raw.snps.indels.vcf"
-vcf_exists_flag = os.path.isfile(vcf_path)
-
-if vcf_exists_flag:
-    answer = input(f"{GROUP_NAME}.raw.snps.indels.vcf already exists (size: {os.path.getsize(vcf_path)//1e6} MB), combine VCFs? y/n ")
-    while answer.lower() not in ['y', 'n']:
-        answer = input("Please enter y or n: ")
-    
-    if answer.lower() == 'y':
-        vcf_exists_flag = False # If yes, pretend it doesn't exist
-
-if not vcf_exists_flag:
-    VCFS = sorted([fname for fname in os.listdir(MAIN_DIR) if (fname.startswith(GROUP_NAME + '-part') and fname.endswith(".raw.snps.indels.vcf"))])
-    print("The following partial VCF(s) were found in main_dir (expect 1-%i):\n" % (sbatch_2_last_part) + '\n'.join(VCFS))
-    
-    answer = input("Proceed with combining? y/n ")
-    while answer.lower() not in ['y', 'n']:
-        answer = input("Please enter y or n: ")
-    
-    if answer.lower() == 'n':
-        sys.exit("Aborting")
-    
-    if len(VCFS) > 1:
-        vcf_partnum_tups = [(vcf, int(vcf.split('-part')[1].split('.raw.snps.indels.vcf')[0])) for vcf in VCFS]
-        ordered_vcfs = [tup[0] for tup in sorted(vcf_partnum_tups, key=lambda x: x[1])]
-
-        o = open(f"{MAIN_DIR}/{GROUP_NAME}.raw.snps.indels.vcf", 'w')
-        first_vcf = ordered_vcfs[0]
-        with open(f"{MAIN_DIR}/{first_vcf}", 'r') as f:
-            for line in f:
-                o.write(line)
-
-        for vcf in ordered_vcfs[1:]:
-            with open(f"{MAIN_DIR}/{vcf}", 'r') as f:
-                for line in f:
-                    if line.startswith("#CHROM"):
-                        break
-
-                for line in f:
-                    o.write(line)
-    
-    o.close()
-
-# =======================
-# Run SnpEff on VCFs
-# =======================
-
-VCF = f"{GROUP_NAME}.raw.snps.indels.vcf"
-
-vcf_ann_path = f"{MAIN_DIR}/{VCF}.ann.txt"
-ann_exists_flag = os.path.isfile(vcf_ann_path)
-
-if ann_exists_flag:
-    answer = input(f"{VCF}.ann.txt already exists (size: {os.path.getsize(vcf_ann_path)//1e6} MB), rerun SnpEff? y/n ")
-    while answer.lower() not in ['y', 'n']:
-        answer = input("Please enter y or n: ")
-
-    if answer.lower() == 'y':
-        ann_exists_flag = False # If yes, pretend it doesn't exist
-
-if not ann_exists_flag:
-    SNPEFF_SPECIES_ID = genome_utils.SPECIES_SNPEFF_ID_DICT[(SPECIES_ABBR, ref_strain)]
-    os.chdir(MAIN_DIR)
-    cmd = f"java -jar {SNPEFF_DIR}/snpEff.jar -formatEFF -o vcf -ud 1000 -c {SNPEFF_DIR}/snpEff.config {SNPEFF_SPECIES_ID} {MAIN_DIR}/{VCF} > {MAIN_DIR}/{VCF}.ann.txt"
-    print(cmd)
-    os.system(cmd)
-
-# =======================
 # Load data from VCF
 # =======================
 
-f = open(f"{MAIN_DIR}/{VCF}.ann.txt")
+f = open(VCF_NAME)
 
 child_samples = []
 for line in f:
@@ -258,9 +183,9 @@ def AD_to_AAF(AD):
     total_depth = sum(depths)
     return sum(alt_depths)/total_depth
 
-ordered_samples = [PARENT_SAMPLE] + sorted(child_samples)
+ordered_samples = [PARENT_SAMPLE] + sorted([sample for sample in child_samples if sample not in samples_to_exclude])
 
-f = open(f"{MAIN_DIR}/{GROUP_NAME}_SNV-INDELs.tsv", 'w')
+f = open(f"{GROUP_NAME}_SNV-INDELs.tsv", 'w')
 header_items = ['Chromosome', 'Position', 'Gene_Name', 'Gene_Descrip', 'Quality', 'Ref_Base', 'Alt_Base', 'Type', 
                 'Effect', 'Impact', 'Codon_Change', 'Amino_Acid_Change']
 
@@ -333,4 +258,4 @@ for chrom in chrom_pos_sample_data_dict:
 
 f.close()
 
-print(f"Done! Check {MAIN_DIR}/{GROUP_NAME}_SNV-INDELS.tsv")
+print(f"Done! Check {GROUP_NAME}_SNV-INDELS.tsv")

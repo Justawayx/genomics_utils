@@ -30,9 +30,15 @@ interval_sample_cr_dict = defaultdict(dict) # (contig, start, end) -> sample -> 
 # Store sample data
 
 FIRST_SAMPLE = True
+new_ordered_samples = []
 
 for sample in ordered_samples:
-	f = open('%s/%s.denoisedCR.tsv' % (output_dir, sample), 'r')
+	try:
+		f = open('%s/%s.denoisedCR.tsv' % (output_dir, sample), 'r')
+		new_ordered_samples.append(sample)
+	except:
+		print("denoisedCR.tsv file is missing for %s" % sample)
+		continue
 	
 	DATA_STARTED = False
 	for line in f:
@@ -51,6 +57,8 @@ for sample in ordered_samples:
 			DATA_STARTED = True
 	
 	FIRST_SAMPLE = False
+
+ordered_samples = new_ordered_samples
 
 # Gene annotations
 
