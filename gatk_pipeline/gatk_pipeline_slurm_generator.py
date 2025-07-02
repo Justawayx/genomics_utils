@@ -98,24 +98,45 @@ chromosomes_ordered.append(chrom)
 print(sorted(chrom_length_dict.items()))
 
 genome_length = sum(chrom_length_dict.values())
-genome_breakpoints = [((genome_length/num_qsub_2_scripts)*i) for i in range(1,num_qsub_2_scripts)] + [genome_length]
-chromosome_lists = [] # List of lists for each qsub_2 script
+genome_breakpoints = [0] + [int((genome_length/num_qsub_2_scripts)*i) for i in range(1,num_qsub_2_scripts)] + [genome_length]
 
-cur_breakpoint_idx = 0
-cur_chromosome_list = []
-for i in range(len(chromosomes_ordered)):
-	chrom = chromosomes_ordered[i]
-	end_pos = chromosome_boundaries_ordered[i+1]
-	cur_chromosome_list.append(chrom)
-	if end_pos >= genome_breakpoints[cur_breakpoint_idx]:
-		cur_breakpoint_idx += 1
-		chromosome_lists.append(cur_chromosome_list)
-		cur_chromosome_list = []
+chromosome_interval_lists = [] # List of lists for each qsub_2 script
+
+cur_chromosome_interval_list = []
+
+for idx in range(len(genome_breakpoints)-1):
+    interval_start = genome_breakpoints[idx]
+    interval_end = genome_breakpoints[idx+1]
+	
+    for i in range(len(chromosomes_ordered)):
+        chrom = chromosomes_ordered[i]
+        chrom_start = chromosome_boundaries_ordered[i]
+        chrom_end = chromosome_boundaries_ordered[i+1]
+		
+        interval_start_internal = interval_start - chrom_start + 1 # May not be valid
+        interval_end_internal = interval_end - chrom_start # May not be valid
+		
+        chrom_start_internal = 1
+        chrom_end_internal = chrom_length_dict[chrom]
+		
+        if interval_start >= chrom_start and interval_start <= chrom_end: # Chromosome straddles left side of interval
+            cur_chromosome_interval_list.append('%s:%i-%i' % (chrom, interval_start_internal, chrom_end_internal))
+        elif interval_start <= chrom_start and interval_end >= chrom_end: # Chromosome is inside interval
+            cur_chromosome_interval_list.append('%s:%i-%i' % (chrom, chrom_start_internal, chrom_end_internal))
+        elif interval_end >= chrom_start and interval_end <= chrom_end: # Chromosome straddles right side of interval
+            cur_chromosome_interval_list.append('%s:%i-%i' % (chrom, chrom_start_internal, interval_end_internal))
+        elif interval_start >= chrom_start and interval_end <= chrom_end: # Chromosome contains entire interval
+            cur_chromosome_interval_list.append('%s:%i-%i' % (chrom, interval_start_internal, interval_end_internal))
+        else:
+            pass
+    
+    chromosome_interval_lists.append(cur_chromosome_interval_list)
+    cur_chromosome_interval_list = []
 
 gatk_input_combined_samples_str = '\n'.join(["\t-I $main_dir/%s.ready.bam \\" % sample for sample in samples])
 
-for idx, chromosome_list in enumerate(chromosome_lists):
-	gatk_specify_chrom_options = '' if num_qsub_2_scripts == 1 else ('\n\t-L ' + ' -L '.join(chromosome_list) + ' \\')
+for idx, chromosome_interval_list in enumerate(chromosome_interval_lists):
+	gatk_specify_chrom_options = '' if num_qsub_2_scripts == 1 else ('\n\t-L ' + ' -L '.join(chromosome_interval_list) + ' \\')
 	part_str = '' if num_qsub_2_scripts == 1 else "-part%i" % (idx + 1)
 	
 	qsub_2_call_variants_str = \
@@ -202,6 +223,7 @@ f'''#!/bin/sh
 #SBATCH --qos=hotel
 #SBATCH --account={ACCOUNT}
 #SBATCH --export=ALL
+#SBATCH --exclude tscc-11-2
 #SBATCH --output {LOG_DIR}/slurm-%A_%a.%x.out-%N
 #SBATCH --output {LOG_DIR}/slurm-%A_%a.%x.err-%N
 #SBATCH --mail-type {EMAIL_OPTIONS}
