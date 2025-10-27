@@ -8,6 +8,19 @@ from tqdm import tqdm
 # Parameters
 # =======================
 
+genes_of_interest = [
+    'PF3D7_0709000', # CRT
+    'PF3D7_0523000', # MDR1
+    'PF3D7_0629500', # AAT1
+    'PF3D7_1343700', # Kelch13
+    'PF3D7_0417200', # DHFR-TS
+    'PF3D7_0810800', # PPPK-DHPS
+    'PF3D7_1036800', # AT1
+    'PF3D7_1229100', # MRP2
+    'PF3D7_1447900', # MDR2
+    'PF3D7_1251200', # Coronin
+]
+
 CONFIG_PATH = os.path.abspath('config.cfg')
 
 def get_env_value_from_config(env_variable):
@@ -30,11 +43,6 @@ GROUP_NAME = get_env_value_from_config('group_name')
 
 samples = [line.strip() for line in open(SAMPLES_PATH, 'r')]
 print("Here are the sample names:\n\t" + '\n\t'.join(samples))
-answer = input("Enter name of the parent sample: ")
-while answer not in samples:
-    answer = input("%s is not in samples.txt, please try again: " % answer)
-
-PARENT_SAMPLE = answer
 
 SNPEFF_DIR = f"{WDIR}/TOOLS/snpEff"
 
@@ -160,25 +168,21 @@ if not ann_exists_flag:
 
 f = open(f"{MAIN_DIR}/{VCF}.ann.txt")
 
-child_samples = []
+vcf_samples = []
 for line in f:
     if line.startswith('#CHROM'):
         header_items = line.strip().split('\t')
         for item in header_items[9:]:
-            if item != PARENT_SAMPLE:
-                child_samples.append(item)
+            vcf_samples.append(item)
         break
 
-if set(child_samples + [PARENT_SAMPLE]) != set(samples):
+if set(vcf_samples) != set(samples):
     sys.exit("Samples in VCF are inconsistent with the samples in samples.txt, aborting")
 
 chrom_pos_sample_data_dict = defaultdict(dict) # chrom -> pos -> sample -> data
 chrom_pos_anno_dict = defaultdict(dict) # chrom -> pos -> (ref, alt, gene, type, effect, impact, codon_change, aa_change)
 
-revert_sites = set() # (chrom, pos) tuples
-
 chrom_pos_quality_dict = defaultdict(dict)
-parent_col_idx = header_items.index(PARENT_SAMPLE)
 
 for line in tqdm(f):
     items = line.strip().split('\t')
@@ -186,17 +190,37 @@ for line in tqdm(f):
     POS = int(POS); QUAL = float(QUAL)
     chrom_pos_quality_dict[CHROM][POS] = QUAL
     
-    parent_data = items[parent_col_idx]
-    parent_data_dict = get_format_data_dict(FORMAT, parent_data)
-    
-    if parent_data_dict['GT'] == './.' or 'DP' not in parent_data_dict or parent_data_dict['DP'] in ['.', '0']:
-        continue
-    
     info_dict = parse_info(INFO)
     
     if ("ReadPosRankSum" in info_dict and (float(info_dict["ReadPosRankSum"]) > 10 or float(info_dict["ReadPosRankSum"]) < -10)) \
      or ("QD" in info_dict and float(info_dict["QD"]) < 1.5) \
      or ("MQRankSum" in info_dict and float(info_dict["MQRankSum"]) < -14):
+        continue
+    
+    is_gene_of_interest = False
+
+    pre_eff = INFO.split(';EFF=')[0]
+    eff = INFO.split(';EFF=')[1].split(';')[0]
+
+    allele_anno_dict = {}
+    for anno in eff.split(','):
+        last = anno.split('|')[-1]
+        if 'INFO_' in last or 'WARNING_' in last:
+            alt_allele = anno.split('|')[-2].split(')')[0]
+        else:
+            alt_allele = anno.split('|')[-1].split(')')[0]
+        effect, rest = anno.split('(')
+        impact, codon_change, aa_change, _, gene = rest.split('|')[1:6] # Note that codon_change is distance for intergenics
+        gene = unquote(gene)
+        if gene in genes_of_interest:
+            is_gene_of_interest = True
+        if alt_allele in allele_anno_dict: # Already has its own annotation
+            if allele_anno_dict[alt_allele][0] == 'intergenic_region': # Replace intergenic
+                allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
+        else:
+            allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
+    
+    if not is_gene_of_interest:
         continue
     
     sample_data_dict = {}
@@ -209,31 +233,9 @@ for line in tqdm(f):
             continue
         else:
             AD = data_dict['AD']
-            pvalue = compare_child_to_parent(AD, parent_data_dict['AD'])
-            sample_data_dict[sample] = (GT, AD, pvalue)
+            sample_data_dict[sample] = (GT, AD)
     
     chrom_pos_sample_data_dict[CHROM][POS] = sample_data_dict
-    
-    first_alt_allele = ALT.split(',')[0]
-    
-    pre_eff = INFO.split(';EFF=')[0]
-    eff = INFO.split(';EFF=')[1].split(';')[0]
-    
-    allele_anno_dict = {}
-    for anno in eff.split(','):
-        last = anno.split('|')[-1]
-        if 'INFO_' in last or 'WARNING_' in last:
-            alt_allele = anno.split('|')[-2].split(')')[0]
-        else:
-            alt_allele = anno.split('|')[-1].split(')')[0]
-        effect, rest = anno.split('(')
-        impact, codon_change, aa_change, _, gene = rest.split('|')[1:6] # Note that codon_change is distance for intergenics
-        gene = unquote(gene)
-        if alt_allele in allele_anno_dict: # Already has its own annotation
-            if allele_anno_dict[alt_allele][0] == 'intergenic_region': # Replace intergenic
-                allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
-        else:
-            allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
        
     vtypes = []; effects = []; impacts = []; codon_changes = []; aa_changes = []
     for alt_allele in ALT.split(','):
@@ -258,7 +260,7 @@ def AD_to_AAF(AD):
     total_depth = sum(depths)
     return sum(alt_depths)/total_depth
 
-ordered_samples = [PARENT_SAMPLE] + sorted(child_samples)
+ordered_samples = sorted(vcf_samples)
 
 f = open(f"{MAIN_DIR}/{GROUP_NAME}_SNV-INDELs.tsv", 'w')
 header_items = ['Chromosome', 'Position', 'Gene_Name', 'Gene_Descrip', 'Quality', 'Ref_Base', 'Alt_Base', 'Type', 
@@ -271,14 +273,9 @@ for sample in ordered_samples:
     header_items.append("%s_AltFrequency" % sample)
 
 for sample in ordered_samples:
-    header_items.append("%s_Pvalue" % sample)
-
-for sample in ordered_samples:
     header_items.append("%s_AlleleDepths" % sample)
 
 header_items.append("Has_NonHet")
-header_items.append("Best_AAF_diff")
-header_items.append("Best_Pvalue")
 
 f.write('\t'.join(header_items) + '\n')
 
@@ -302,34 +299,17 @@ for chrom in chrom_pos_sample_data_dict:
             AAF = AD_to_AAF(AD) if AD != '.' else '.'
             items.append(AAF); AAFs.append(AAF); ADs.append(AD)
         
-        pvalues = []
-        for sample in ordered_samples:
-            pvalue = chrom_pos_sample_data_dict[chrom][pos][sample][2] if sample in chrom_pos_sample_data_dict[chrom][pos] else '.'
-            items.append(pvalue)
-            pvalues.append(pvalue)
-        
         for sample in ordered_samples:
             AD = chrom_pos_sample_data_dict[chrom][pos][sample][1] if sample in chrom_pos_sample_data_dict[chrom][pos] else '.'
             items.append(AD)
         
         has_non_het = False
-        has_good_pvalue = False
-        all_pvalues = []
-        all_AAF_diffs = []
-        for AD, GT, AAF, pvalue in zip(ADs, GTs, AAFs, pvalues):
-            if pvalue != '.':
-                all_pvalues.append(pvalue)
-                all_AAF_diffs.append(np.abs(AAF - AAFs[0]))
-                if pvalue <= 0.05:
-                    has_good_pvalue = True
+        for AD, GT in zip(ADs, GTs):
             if not GT.startswith('0/') and AD != "LowDP":
                 has_non_het = True
         
         items.append(has_non_het)
-        items.append(max(all_AAF_diffs))
-        items.append(min(all_pvalues))
-        if has_good_pvalue:
-            f.write('\t'.join([str(item) for item in items]) + '\n')
+        f.write('\t'.join([str(item) for item in items]) + '\n')
 
 f.close()
 

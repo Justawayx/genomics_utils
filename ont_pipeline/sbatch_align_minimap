@@ -17,6 +17,7 @@
 . /tscc/projects/ps-winzelerlab/SEQUENCING/Winzeler/Mariana/CBR-001-854-181-6_Dd2B2_Batch2/config.cfg
 
 module load shared
+module load picard
 module load samtools
 
 readarray samples < $samples_file
@@ -43,21 +44,29 @@ echo "Sorting bam"
 
 samtools sort -@ 8 -m 1G -O bam -o $main_dir/${sample}_sorted.bam $main_dir/${sample}.bam
 
-echo "Create index"
+echo "Add sample information"
 
-samtools index $main_dir/${sample}_sorted.bam
+picard AddOrReplaceReadGroups \
+I=$main_dir/${sample}_sorted.bam \
+O=$main_dir/${sample}_sorted.rg.bam \
+RGID=$sample \
+RGLB=$fastq_sample \
+RGPL=ONT \
+RGPU=$fastq_sample \
+RGSM=$sample \
+CREATE_INDEX=true
 
-source "/tscc/nfs/home/dwc001/miniconda3/etc/profile.d/conda.sh"
-conda activate medaka_env
+echo "Running Picard MarkDuplicates..."
 
-echo "Run Longshot"
+picard MarkDuplicates \
+I=$main_dir/${sample}_sorted.rg.bam \
+O=$main_dir/${sample}_sorted.rg.md.bam \
+M=$main_dir/${sample}_sorted.rg.md.metrics.txt \
+CREATE_INDEX=true
 
-longshot --bam $main_dir/${sample}_sorted.bam --ref $ref_fasta --out $main_dir/${sample}.longshot.vcf --sample_id $sample --no_haps
+echo "Filter out MQ=0 reads..."
 
-echo "Run SnpEff"
-
-java -jar $snpeff_dir/snpEff.jar -formatEFF -o vcf -ud 1000 -c $snpeff_dir/snpEff.config $snpeff_species_id $main_dir/${sample}.longshot.vcf > $main_dir/${sample}.longshot.vcf.ann.txt
+samtools view -@ 8 -b -q 1 -o $main_dir/${sample}.ready.bam $main_dir/${sample}_sorted.rg.md.bam
+samtools index $main_dir/${sample}.ready.bam -o $main_dir/${sample}.ready.bai
 
 echo "Done!"
-
-
