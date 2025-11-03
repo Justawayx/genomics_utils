@@ -1,0 +1,28 @@
+#!/bin/sh
+#SBATCH --job-name Jason-LNA27_GATK4
+#SBATCH --partition=hotel
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem-per-cpu=10GB
+#SBATCH --time=99:00:00
+#SBATCH --qos=hotel
+#SBATCH --account=htl124
+#SBATCH --export=ALL
+#SBATCH --output /tscc/lustre/ddn/scratch/dwc001/logs/slurm-%A_%a.%x.out-%N
+#SBATCH --output /tscc/lustre/ddn/scratch/dwc001/logs/slurm-%A_%a.%x.err-%N
+#SBATCH --mail-type END
+#SBATCH --mail-user dwc001@ucsd.edu
+#SBATCH --array=1-14
+
+module load singularitypro
+
+analysis=/tscc/projects/ps-winzelerlab/SEQUENCING/Winzeler/Jason/LNA27_Selection_Dd2_Optimized_GATK4_pipeline_test
+container=/tscc/projects/ps-winzelerlab/TOOLS/opti_gatk4_230911.sif
+
+singularity exec -B $analysis:/opt/input $container \
+MakingGVCFs -i /opt/input/sample_list.tsv \
+-c $SLURM_ARRAY_TASK_ID \
+-b /opt/input/Bam_dir \
+-g /opt/input/gVCF_dir
+

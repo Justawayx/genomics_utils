@@ -1,0 +1,15 @@
+Chr1.pass.merged.vcf.gz
+Chr2.pass.merged.vcf.gz
+Chr3.pass.merged.vcf.gz
+Chr3.pass.merged.vcf.gz
+Chr4.pass.merged.vcf.gz
+Chr5.pass.merged.vcf.gz
+Chr6.pass.merged.vcf.gz
+Chr7.pass.merged.vcf.gz
+Chr8.pass.merged.vcf.gz
+Chr9.pass.merged.vcf.gz
+Chr10.pass.merged.vcf.gz
+Chr11.pass.merged.vcf.gz
+Chr12.pass.merged.vcf.gz
+Chr13.pass.merged.vcf.gz
+Chr14.pass.merged.vcf.gz

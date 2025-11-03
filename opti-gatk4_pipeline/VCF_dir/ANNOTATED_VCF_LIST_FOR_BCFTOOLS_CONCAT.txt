@@ -1,0 +1,15 @@
+Chr1.pass.merged.annotated.vcf.gz
+Chr2.pass.merged.annotated.vcf.gz
+Chr3.pass.merged.annotated.vcf.gz
+Chr3.pass.merged.annotated.vcf.gz
+Chr4.pass.merged.annotated.vcf.gz
+Chr5.pass.merged.annotated.vcf.gz
+Chr6.pass.merged.annotated.vcf.gz
+Chr7.pass.merged.annotated.vcf.gz
+Chr8.pass.merged.annotated.vcf.gz
+Chr9.pass.merged.annotated.vcf.gz
+Chr10.pass.merged.annotated.vcf.gz
+Chr11.pass.merged.annotated.vcf.gz
+Chr12.pass.merged.annotated.vcf.gz
+Chr13.pass.merged.annotated.vcf.gz
+Chr14.pass.merged.annotated.vcf.gz
