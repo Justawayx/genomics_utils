@@ -17,7 +17,7 @@
 . /tscc/projects/ps-winzelerlab/SEQUENCING/Winzeler/Mariana/CBR-001-854-181-6_Dd2B2_Batch2/config.cfg
 
 module load shared
-module load samtools
+module load bcftools
 
 echo "Run mpileup variant calling"
 

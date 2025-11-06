@@ -67,6 +67,6 @@ CREATE_INDEX=true
 echo "Filter out MQ=0 reads..."
 
 samtools view -@ 8 -b -q 1 -o $main_dir/${sample}.ready.bam $main_dir/${sample}_sorted.rg.md.bam
-samtools index $main_dir/${sample}.ready.bam -o $main_dir/${sample}.ready.bai
+samtools index $main_dir/${sample}.ready.bam $main_dir/${sample}.ready.bai
 
 echo "Done!"
