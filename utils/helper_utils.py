@@ -129,13 +129,13 @@ def get_AAF_for_single_alt_allele(ALT, orig_AD, desired_alt_allele):
 def get_major_alt_allele(AD, ALT):
     alt_depths = [int(d) for d in AD.split(',')][1:]
     alt_alleles = ALT.split(',')
-    allele_depth_tups = sorted(zip(alt_alleles, alt_depths))
-    major_alt_allele, major_alt_allele_depth = allele_depth_tups[-1]
+    allele_depth_tups = sorted(zip(alt_depths, alt_alleles))
+    major_alt_allele_depth, major_alt_allele = allele_depth_tups[-1]
     return major_alt_allele, alt_alleles.index(major_alt_allele)
 
 def reverse_complement(dna):
     rc_dna = ''
-    comp_nuc_dict = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
+    comp_nuc_dict = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N'}
     for nuc in dna[::-1]:
         rc_dna += comp_nuc_dict[nuc]
     return rc_dna

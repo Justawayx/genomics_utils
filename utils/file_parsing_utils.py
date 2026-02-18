@@ -139,8 +139,8 @@ def get_major_alt_allele(AD, ALT):
 	"""
 	alt_depths = [int(d) for d in AD.split(',')][1:]
 	alt_alleles = ALT.split(',')
-	allele_depth_tups = sorted(zip(alt_alleles, alt_depths))
-	major_alt_allele, major_alt_allele_depth = allele_depth_tups[-1]
+	allele_depth_tups = sorted(zip(alt_depths, alt_alleles))
+	major_alt_allele_depth, major_alt_allele = allele_depth_tups[-1]
 	return major_alt_allele
 
 def get_major_allele_num(AD):
@@ -195,7 +195,7 @@ def filter_variant(QUAL, info_dict):
 	if "ReadPosRankSum" in info_dict:
 		rp_rs = float(info_dict["ReadPosRankSum"])
 		
-		if rp_rs > 10 or rp_rs < -10:
+		if rp_rs > 14 or rp_rs < -14:
 			return True
 	
 	if "QD" in info_dict:
@@ -212,6 +212,53 @@ def filter_variant(QUAL, info_dict):
 	
 	return False
 
+# +
+disruptive_effects = ['conservative_inframe_deletion', 'conservative_inframe_insertion', 'disruptive_inframe_deletion', 
+                      'disruptive_inframe_insertion', 'exon_loss_variant', 'frameshift_variant',
+                      'inframe_deletion', 'inframe_insertion', 'initiator_codon_variant', 
+                      'missense_variant', 'splice_acceptor_variant', 'splice_donor_variant',
+                      'start_lost', 'stop_gained', 'stop_lost']
+
+def effect_priority_encoding(effect):
+    if effect == 'intergenic_region':
+        return 0 # Lowest priority
+    elif 'stream' in effect:
+        return 1
+    elif 'UTR' in effect:
+        return 2
+    elif effect in disruptive_effects:
+        return 5
+    else:
+        return 3
+
+def store_SnpEff_effect(snpeff_effect, allele_anno_dict, force_replace=False):
+    """
+    Parses SnpEff variant effect string and updates anno. dictionary entry
+    """
+    for anno in snpeff_effect.split(','):
+        last = anno.split('|')[-1]
+        if 'INFO_' in last or 'WARNING_' in last:
+            alt_allele = anno.split('|')[-2].split(')')[0]
+        else:
+            alt_allele = anno.split('|')[-1].split(')')[0]
+        effect, rest = anno.split('(')
+        impact, codon_change, aa_change, _, gene = rest.split('|')[1:6] # codon_change is distance for intergenics
+        gene = unquote(gene)
+        if (not force_replace) and (alt_allele in allele_anno_dict): # Already has its own annotation
+            # Replace if existing effect is lower priority
+            existing_effect_priority = effect_priority_encoding(allele_anno_dict[alt_allele][0])
+            new_effect_priority = effect_priority_encoding(effect)
+            if new_effect_priority > existing_effect_priority:
+                allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
+            elif new_effect_priority == existing_effect_priority:
+                if 'stream' in effect and int(codon_change) < int(allele_anno_dict[alt_allele][2]): # Replace with closer down/upstream
+                    allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
+                else: # Replace stream with non-stream
+                    allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
+        else:
+            allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
+
+'''
 def store_SnpEff_effect(snpeff_effect, allele_anno_dict, force_replace=False):
 	"""
 	Parses SnpEff variant effect string and updates anno. dictionary entry
@@ -232,7 +279,7 @@ def store_SnpEff_effect(snpeff_effect, allele_anno_dict, force_replace=False):
 		
 		if (not force_replace) and (alt_allele in allele_anno_dict): # Already has its own annotation
 			
-			if allele_anno_dict[alt_allele][0] == 'intergenic_region': # Replace intergenic
+			if allele_anno_dict[alt_allele][0] in ['intergenic_region', '3_prime_UTR_variant', '5_prime_UTR_variant']: # Replace intergenic
 				allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
 			elif effect == 'intergenic_region':
 				pass
@@ -252,6 +299,11 @@ def store_SnpEff_effect(snpeff_effect, allele_anno_dict, force_replace=False):
 				# print((effect, impact, codon_change, aa_change, gene)); print()
 		else:
 			allele_anno_dict[alt_allele] = (effect, impact, codon_change, aa_change, gene)
+'''
+pass
+
+
+# -
 
 def inspect_VCF_row(filepath, desired_chrom, desired_pos):
 	"""
@@ -443,7 +495,7 @@ def update_annotations_from_annotated_VCF(filepath, site_allele_anno_dict, force
 	return
 
 
-def parse_annotated_VCF(filepath, site_allele_anno_dict, parent_sample, desired_samples=None, p_threshold=0.001, tqdm_on=False):
+def parse_annotated_VCF(filepath, site_allele_anno_dict, parent_sample, desired_samples=None, p_threshold=0.001, tqdm_on=False, force_replace=False):
 	"""
 	Reads a SnpEff-annotated VCF, updating variant annotation dictionary and returning sample variant records
 	
@@ -491,7 +543,7 @@ def parse_annotated_VCF(filepath, site_allele_anno_dict, parent_sample, desired_
 		except:
 			site_allele_anno_dict[CHROM] = defaultdict(dict)
 			allele_anno_dict = site_allele_anno_dict[CHROM][POS]
-		store_SnpEff_effect(info_dict['EFF'], allele_anno_dict)
+		store_SnpEff_effect(info_dict['EFF'], allele_anno_dict, force_replace=force_replace)
 		
 		# Store child sample data
 		for idx in desired_sample_idxs:
@@ -521,10 +573,17 @@ def parse_annotated_VCF(filepath, site_allele_anno_dict, parent_sample, desired_
 	return clone_mutation_records_dict
 
 def annotate_record(mutation_record, site_allele_anno_dict):
-	CHROM, POS, QUAL, GT, AD, parent_AD, REF, ALT = mutation_record
-	major_alt_allele = get_major_alt_allele(AD, ALT)
-	effect, impact, codon_change, aa_change, gene = site_allele_anno_dict[CHROM][POS][major_alt_allele]
-	return effect, impact, codon_change, aa_change, gene
+    CHROM, POS, QUAL, GT, AD, parent_AD, REF, ALT = mutation_record
+    # * has no annotation, so remove it if present
+    if '*' in ALT:
+        new_AD = [AD.split(',')[0]]; new_ALT = []
+        for d, a in zip(AD.split(',')[1:], ALT.split(',')):
+            if a != '*':
+                new_AD.append(d); new_ALT.append(a)
+        AD = ','.join(new_AD); ALT = ','.join(new_ALT)
+    major_alt_allele = get_major_alt_allele(AD, ALT)
+    effect, impact, codon_change, aa_change, gene = site_allele_anno_dict[CHROM][POS][major_alt_allele]
+    return effect, impact, codon_change, aa_change, gene
 
 def filter_mutation_records(clone_mutation_records_dict, min_quality=None, min_depth=None, min_AAF=None, min_AAF_diff=None, max_AAF_diff=None, max_pvalue=None):
 	"""
