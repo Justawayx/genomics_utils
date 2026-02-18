@@ -68,7 +68,7 @@ for strain in strain_groups_dict:
     ordered_samples = []
     ordered_intervals = [] # List of (contig, start, end) tuples
     
-    for group in group_samples_dict:
+    for group in strain_groups_dict[strain]:
         ordered_samples += group_samples_dict[group]
     
     # Store sample data
