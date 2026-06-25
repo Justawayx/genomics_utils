@@ -44,6 +44,7 @@ def get_feature_desc_dict(species, chrom_feature_data_dict, desired_feature_type
 # ADD NEW GENOME INFO HERE
 SPECIES_SNPEFF_ID_DICT = {
 	("p_fal", "3D7"): "Pf3D7v3",
+    ("p_fal", "Dd2"): "PfDd2v66",
 	("t_cru", "SylvioX10"): "TcSylvioX10v67",
 	("s_cer", "S288C"): "R64-5-1",
 	("l_don", "BPK282A1"): "Ld_BPK282A1",
@@ -75,6 +76,7 @@ class GenomeAnnotation:
 		# ADD NEW GENOME INFO HERE
 		self.GFF_PATH_MAP = {
 			("p_fal", "3D7"): f"{WDIR}/GENOME_RESOURCES/p_fal/p_fal_ref/p_fal.gff",
+            ("p_fal", "Dd2"): f"{WDIR}/GENOME_RESOURCES/p_fal/PfDd2_PlasmoDB_66/PlasmoDB-66_PfalciparumDd2.gff",
 			("t_cru", "SylvioX10"): f"{WDIR}/GENOME_RESOURCES/t_cru/TcSylvioX10-1_TriTypDB_67/TriTrypDB-67_TcruziSylvioX10-1.gff",
 			("s_cer", "S288C"): f"{WDIR}/GENOME_RESOURCES/s_cer/ScS288C_SGD_R64-5-1/saccharomyces_cerevisiae_R64-5-1_20240529.gff",
 			("l_don", "BPK282A1"): f"{WDIR}/GENOME_RESOURCES/l_don/GCF_000227135.1_ASM22713v2/GCF_000227135.1_ASM22713v2_genomic.gff"
@@ -162,16 +164,20 @@ class GenomeAnnotation:
 			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'gene', 'display')
 		elif self.species == 'l_don':
 			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'exon', 'product')
-		elif self.species == 'p_fal':
+		elif self.species == 'p_fal' and self.strain == '3D7':
 			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'gene', 'description')
+		elif self.species == 'p_fal' and self.strain == 'Dd2':
+			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'protein_coding_gene', 'description')
 	
 	def get_gene_symbol_dict(self):
 		if self.species == 's_cer':
 			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'gene', 'gene')
 		elif self.species == 'l_don':
 			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'exon', 'locus_tag')
-		elif self.species == 'p_fal':
+		elif self.species == 'p_fal' and self.strain == '3D7':
 			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'gene', 'Alias') # With updated reference genome, change to Name
+		elif self.species == 'p_fal' and self.strain == 'Dd2':
+			return get_feature_desc_dict(self.species, self.chrom_feature_data_dict, 'protein_coding_gene', 'Name')
 	
 	def get_chromosomes(self):
 		return sorted(self.chrom_feature_data_dict.keys())

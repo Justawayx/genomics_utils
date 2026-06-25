@@ -53,9 +53,12 @@ def parse_info(INFO):
 # Load gene annotations
 # =======================
 
-species_ref_strain_map = {'p_fal': '3D7', 't_cru': 'SylvioX10', 's_cer': 'R64', 'l_don': 'BPK282A1'}
+if len(sys.argv) == 2:
+    ref_strain = sys.argv[1] # Treat argument as special reference strain
+else:
+    species_ref_strain_map = {'p_fal': '3D7', 't_cru': 'SylvioX10', 's_cer': 'R64', 'l_don': 'BPK282A1'}
+    ref_strain = species_ref_strain_map[SPECIES_ABBR]
 
-ref_strain = species_ref_strain_map[SPECIES_ABBR]
 ga = genome_utils.GenomeAnnotation(WDIR, SPECIES_ABBR, ref_strain)
 gene_desc_dict = ga.get_gene_desc_dict()
 
@@ -169,8 +172,21 @@ for line in f:
                 child_samples.append(item)
         break
 
+samples_to_use = set(samples)
+samples_present = set(child_samples + [PARENT_SAMPLE])
 if set(child_samples + [PARENT_SAMPLE]) != set(samples):
-    sys.exit("Samples in VCF are inconsistent with the samples in samples.txt, aborting")
+    abort = False
+    for sample in samples_to_use:
+        if sample not in samples_present:
+            abort = True
+    samples_to_skip = []
+    for sample in samples_present:
+        if sample not in samples_to_use:
+            samples_to_skip.append(sample)
+    if abort:
+        sys.exit("Samples in VCF are inconsistent with the samples in samples.txt, aborting")
+    else:
+        print("These samples will be skipped:", ', '.join(samples_to_skip))
 
 chrom_pos_sample_data_dict = defaultdict(dict) # chrom -> pos -> sample -> data
 chrom_pos_anno_dict = defaultdict(dict) # chrom -> pos -> (ref, alt, gene, type, effect, impact, codon_change, aa_change)

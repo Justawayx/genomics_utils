@@ -1,3 +1,7 @@
+# New approach for TSCC
+# module load lftp
+# lftp subftp:pwd@ftp-private.ncbi.nlm.nih.gov
+
 import ftputil
 import os
 

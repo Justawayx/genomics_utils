@@ -64,34 +64,34 @@ ordered_samples = new_ordered_samples
 
 interval_gene_id_desc_class_dict = {} # (contig, start, end) -> (ID, desc, class)
 
-f = open('/tscc/projects/ps-winzelerlab/PROJECTS/daisy/REF_DATA/p_fal/%s_interval_annotations.tsv' % strain, 'r')
-header = f.readline()
+f = open('/tscc/projects/ps-winzelerlab/GENOME_RESOURCES/p_fal/GATK_CNV/references/p_fal.preprocessed.interval_list.annotated', 'r')
+# header = f.readline()
 for line in f:
-	items = line.split('\t')
-	contig, start, end, = items[:3]
-	gene_id, gene_desc, miles_genome_class = items[-3:]
-	start = int(start); end = int(end); miles_genome_class = miles_genome_class.strip()
-	interval_gene_id_desc_class_dict[(contig, start, end)] = (gene_id, gene_desc, miles_genome_class)
+    items = line.strip('\n').split('\t')
+    contig, start, end, gene_id, gene_desc = items
+    # gene_id, gene_desc, miles_genome_class = items[-3:]
+    start = int(start); end = int(end); # miles_genome_class = miles_genome_class.strip()
+    interval_gene_id_desc_class_dict[(contig, start, end)] = (gene_id, gene_desc)
 
 f.close()
 
 # Combine into output file
 
-header_items = ['CONTIG', 'START', 'END', 'Gene_ID', 'Gene_Description', 'Miles-et-al-2016-Genome-Classification'] + ordered_samples
+header_items = ['CONTIG', 'START', 'END', 'Gene_ID', 'Gene_Description'] + ordered_samples
 
 of = open('%s/%s_CNV_analysis.tsv' % (output_dir, group_name), 'w')
 
 of.write('\t'.join(header_items) + '\n')
 
 for interval in ordered_intervals:
-	contig, start, end = interval
-	gene_id, gene_desc, miles_genome_class = interval_gene_id_desc_class_dict[interval]
-	items = [contig, start, end, gene_id, gene_desc, miles_genome_class]
-	for sample in ordered_samples:
-		log2_cr = interval_sample_cr_dict[interval][sample]
-		items.append(log2_cr)
-	
-	of.write('\t'.join([str(item) for item in items]) + '\n')
+    contig, start, end = interval
+    gene_id, gene_desc = interval_gene_id_desc_class_dict[interval]
+    items = [contig, start, end, gene_id, gene_desc]
+    for sample in ordered_samples:
+        log2_cr = interval_sample_cr_dict[interval][sample]
+        items.append(log2_cr)
+
+    of.write('\t'.join([str(item) for item in items]) + '\n')
 
 of.close()
 
